@@ -184,8 +184,7 @@ with open('../abkit-templates/configs/result_payload.schema.json', 'w') as f:
 "
 ```
 
-The output is standard JSON Schema (Draft 2020-12 compatible as emitted by
-Pydantic v2).  It contains no nonstandard or internal-only metadata.  The
+The output is standard JSON Schema. It contains no nonstandard or internal-only metadata.  The
 `$defs` block holds every sub-schema referenced by `ResultPayload`,
 including `AnalysisResult`, `DecisionMemo`, `MetricEstimate`, and all
 nested types.
@@ -236,7 +235,7 @@ with expected outputs for all three fixture scenarios.
 
 ---
 
-## Intentionally deferred in v1
+## Intentionally deferred in the current tool version
 
 The following are known simplifications that are documented but not
 addressed in this release:
