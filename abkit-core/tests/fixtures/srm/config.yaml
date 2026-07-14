@@ -1,0 +1,21 @@
+schema_version: "1.0"
+experiment_name: "Homepage banner test"
+experiment_id: "exp_srm_001"
+owner: "growth-data-science"
+hypothesis: "A new homepage banner will increase click-through rate."
+primary_metric: "click_through_rate"
+metric_type: "proportion"
+variants:
+  - "control"
+  - "treatment"
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.03
+srm_alpha: 0.01
+analysis_window_days: 14
+daily_eligible_traffic: 5000
+notes: "Scenario B — skewed assignment produces critical SRM."

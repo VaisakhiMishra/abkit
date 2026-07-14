@@ -1,0 +1,21 @@
+schema_version: "1.0"
+experiment_name: "Onboarding flow simplification"
+experiment_id: "exp_weak_cuped_001"
+owner: "growth-data-science"
+hypothesis: "A simplified onboarding flow will improve day-7 retention."
+primary_metric: "day7_retention"
+metric_type: "proportion"
+variants:
+  - "control"
+  - "treatment"
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.03
+pre_period_window_days: 14
+analysis_window_days: 14
+daily_eligible_traffic: 3000
+notes: "Scenario C — pre-period data exists but low correlation. CUPED not recommended."

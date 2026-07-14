@@ -1,0 +1,1015 @@
+{
+  "$defs": {
+    "AnalysisResult": {
+      "description": "Statistical analysis outputs for the experiment.",
+      "properties": {
+        "primary_metric_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "effective_primary_estimate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The estimate actually used for the decision: CUPED-adjusted when CUPED was applied, raw otherwise.  Identical to primary_metric_result when no CUPED adjustment was made.  The UI must use this field rather than recomputing the raw-vs-CUPED selection itself."
+        },
+        "secondary_metric_results": {
+          "items": {
+            "$ref": "#/$defs/MetricEstimate"
+          },
+          "title": "Secondary Metric Results",
+          "type": "array"
+        },
+        "guardrail_metric_results": {
+          "items": {
+            "$ref": "#/$defs/MetricEstimate"
+          },
+          "title": "Guardrail Metric Results",
+          "type": "array"
+        },
+        "cuped_estimate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cuped_readiness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CupedReadiness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "segment_summaries": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Segment Summaries",
+          "type": "array"
+        }
+      },
+      "title": "AnalysisResult",
+      "type": "object"
+    },
+    "CupedReadiness": {
+      "description": "CUPED readiness assessment for a single metric.",
+      "properties": {
+        "recommendation": {
+          "$ref": "#/$defs/CupedRecommendation"
+        },
+        "matched_coverage": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Matched Coverage",
+          "type": "number"
+        },
+        "pre_post_correlation": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pre Post Correlation",
+          "type": "number"
+        },
+        "estimated_variance_reduction": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Estimated Variance Reduction",
+          "type": "number"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "caveats": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Caveats",
+          "type": "array"
+        }
+      },
+      "required": [
+        "recommendation",
+        "matched_coverage",
+        "pre_post_correlation",
+        "estimated_variance_reduction",
+        "explanation"
+      ],
+      "title": "CupedReadiness",
+      "type": "object"
+    },
+    "CupedRecommendation": {
+      "description": "Tiered CUPED readiness verdict.",
+      "enum": [
+        "recommended",
+        "optional",
+        "not_recommended"
+      ],
+      "title": "CupedRecommendation",
+      "type": "string"
+    },
+    "DecisionMemo": {
+      "description": "High-level experiment decision and supporting narrative.",
+      "properties": {
+        "recommendation": {
+          "$ref": "#/$defs/DecisionRecommendation"
+        },
+        "reasoning_summary": {
+          "title": "Reasoning Summary",
+          "type": "string"
+        },
+        "key_caveats": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Caveats",
+          "type": "array"
+        },
+        "next_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Actions",
+          "type": "array"
+        },
+        "alpha_used": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The significance threshold (alpha) from the experiment config that was applied when reaching this decision.  Stored here so the UI can render 'p=0.02 < alpha=0.05' without accessing ExperimentConfig.",
+          "title": "Alpha Used"
+        }
+      },
+      "required": [
+        "recommendation",
+        "reasoning_summary"
+      ],
+      "title": "DecisionMemo",
+      "type": "object"
+    },
+    "DecisionRecommendation": {
+      "description": "High-level experiment decision.",
+      "enum": [
+        "ship",
+        "hold",
+        "rerun",
+        "inconclusive"
+      ],
+      "title": "DecisionRecommendation",
+      "type": "string"
+    },
+    "DiagnosticIssue": {
+      "description": "A structured issue produced by any validation or QA function.\n\nUse stable ``code`` values so downstream consumers can filter reliably.\n``field`` should name the offending field or CSV column when applicable.",
+      "properties": {
+        "code": {
+          "description": "Stable machine-readable issue code.",
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/IssueSeverity"
+        },
+        "message": {
+          "description": "Human-readable explanation.",
+          "title": "Message",
+          "type": "string"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Field or column involved, or None if not field-specific.",
+          "title": "Field"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional structured details for programmatic use.",
+          "title": "Details"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "DiagnosticIssue",
+      "type": "object"
+    },
+    "DurationPlan": {
+      "description": "Three-scenario duration estimate produced by the planner.",
+      "properties": {
+        "required_n_per_variant": {
+          "title": "Required N Per Variant",
+          "type": "integer"
+        },
+        "required_n_total": {
+          "title": "Required N Total",
+          "type": "integer"
+        },
+        "daily_eligible_traffic": {
+          "title": "Daily Eligible Traffic",
+          "type": "integer"
+        },
+        "optimistic_days": {
+          "title": "Optimistic Days",
+          "type": "integer"
+        },
+        "planned_days": {
+          "title": "Planned Days",
+          "type": "integer"
+        },
+        "conservative_days": {
+          "title": "Conservative Days",
+          "type": "integer"
+        },
+        "assumptions": {
+          "$ref": "#/$defs/DurationPlanAssumptions"
+        },
+        "caveats": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Caveats",
+          "type": "array"
+        }
+      },
+      "required": [
+        "required_n_per_variant",
+        "required_n_total",
+        "daily_eligible_traffic",
+        "optimistic_days",
+        "planned_days",
+        "conservative_days",
+        "assumptions"
+      ],
+      "title": "DurationPlan",
+      "type": "object"
+    },
+    "DurationPlanAssumptions": {
+      "description": "Echo of inputs used to compute the duration plan.",
+      "properties": {
+        "traffic_cap": {
+          "title": "Traffic Cap",
+          "type": "number"
+        },
+        "ramp_up_days": {
+          "title": "Ramp Up Days",
+          "type": "integer"
+        },
+        "planning_buffer_pct": {
+          "title": "Planning Buffer Pct",
+          "type": "number"
+        },
+        "eligibility_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Eligibility Rate"
+        }
+      },
+      "required": [
+        "traffic_cap",
+        "ramp_up_days",
+        "planning_buffer_pct",
+        "eligibility_rate"
+      ],
+      "title": "DurationPlanAssumptions",
+      "type": "object"
+    },
+    "ExperimentConfig": {
+      "description": "Experiment configuration.\n\n``metric_type`` is listed in the required-fields table in 03-schemas.md.\nIt may be omitted for spec-validation-only runs, but ``validate_config``\nwill return a MISSING_METRIC_TYPE error if an analysis run is attempted\nwithout it.\n\n``secondary_metrics`` and ``guardrail_metrics`` accept either plain\nstrings (name only) or full ``MetricSpec`` objects.  Plain strings are\ncoerced to ``MetricSpec(name=..., metric_type='continuous')`` automatically.",
+      "properties": {
+        "schema_version": {
+          "description": "Version of the config structure.",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "experiment_name": {
+          "description": "Human-readable experiment name.",
+          "title": "Experiment Name",
+          "type": "string"
+        },
+        "experiment_id": {
+          "description": "Stable identifier for the experiment.",
+          "title": "Experiment Id",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Primary owner or team.",
+          "title": "Owner",
+          "type": "string"
+        },
+        "hypothesis": {
+          "description": "Short statement of expected impact.",
+          "title": "Hypothesis",
+          "type": "string"
+        },
+        "primary_metric": {
+          "description": "Canonical name of the main success metric.",
+          "title": "Primary Metric",
+          "type": "string"
+        },
+        "metric_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Statistical type of the primary metric: 'proportion' or 'continuous'. Required for analysis runs; optional for spec-validation-only runs."
+        },
+        "variants": {
+          "description": "Allowed variant names, e.g. ['control', 'treatment'].",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Variants",
+          "type": "array"
+        },
+        "expected_allocation": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Planned traffic split by variant. Values must sum to 1.0.",
+          "title": "Expected Allocation",
+          "type": "object"
+        },
+        "unit_of_randomization": {
+          "description": "Unit assigned to variants, e.g. 'user_id' or 'session_id'.",
+          "title": "Unit Of Randomization",
+          "type": "string"
+        },
+        "alpha": {
+          "description": "Significance threshold used for planning or reporting.",
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Alpha",
+          "type": "number"
+        },
+        "power": {
+          "description": "Desired statistical power for planning.",
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Power",
+          "type": "number"
+        },
+        "mde": {
+          "description": "Minimum detectable effect for planning.",
+          "exclusiveMinimum": 0,
+          "title": "Mde",
+          "type": "number"
+        },
+        "secondary_metrics": {
+          "description": "Additional metrics of interest. Each entry may be a plain string (name only) or a full MetricSpec object.",
+          "items": {
+            "$ref": "#/$defs/MetricSpec"
+          },
+          "title": "Secondary Metrics",
+          "type": "array"
+        },
+        "guardrail_metrics": {
+          "description": "Metrics used to detect harmful side effects. Each entry may be a plain string (name only) or a full MetricSpec object.",
+          "items": {
+            "$ref": "#/$defs/MetricSpec"
+          },
+          "title": "Guardrail Metrics",
+          "type": "array"
+        },
+        "segments": {
+          "description": "Segment dimensions to analyze, e.g. ['country', 'device_type'].",
+          "items": {
+            "type": "string"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "pre_period_window_days": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of days used for CUPED covariates.",
+          "title": "Pre Period Window Days"
+        },
+        "analysis_window_days": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Planned experiment window in days.",
+          "title": "Analysis Window Days"
+        },
+        "srm_alpha": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-experiment SRM detection threshold. Overrides the global default of 0.01. Must be between 0.001 and 0.1.",
+          "title": "Srm Alpha"
+        },
+        "daily_eligible_traffic": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected number of eligible units entering the experiment per day.",
+          "title": "Daily Eligible Traffic"
+        },
+        "eligibility_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fraction of total traffic that is eligible. Between 0 and 1 exclusive.",
+          "title": "Eligibility Rate"
+        },
+        "traffic_cap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum fraction of eligible traffic to route to the experiment. Between 0 and 1 exclusive. Defaults to 1.0 when not set.",
+          "title": "Traffic Cap"
+        },
+        "ramp_up_days": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Days before full traffic allocation is reached. Treated as a planning buffer, not a novelty-effect model.",
+          "title": "Ramp Up Days"
+        },
+        "planning_buffer_pct": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Additional fractional buffer on the planned duration. e.g. 0.2 adds 20 percent.",
+          "title": "Planning Buffer Pct"
+        },
+        "exclusion_rules": {
+          "description": "Plain-language exclusions or filter notes.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclusion Rules",
+          "type": "array"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Free-form context.",
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "schema_version",
+        "experiment_name",
+        "experiment_id",
+        "owner",
+        "hypothesis",
+        "primary_metric",
+        "variants",
+        "expected_allocation",
+        "unit_of_randomization",
+        "alpha",
+        "power",
+        "mde"
+      ],
+      "title": "ExperimentConfig",
+      "type": "object"
+    },
+    "IssueSeverity": {
+      "description": "Severity level for a DiagnosticIssue.",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ],
+      "title": "IssueSeverity",
+      "type": "string"
+    },
+    "MetricEstimate": {
+      "description": "Statistical estimate for one metric in one variant comparison.",
+      "properties": {
+        "metric_name": {
+          "title": "Metric Name",
+          "type": "string"
+        },
+        "metric_type": {
+          "$ref": "#/$defs/MetricType",
+          "default": "continuous",
+          "description": "Statistical type used for inference on this metric."
+        },
+        "control_mean": {
+          "title": "Control Mean",
+          "type": "number"
+        },
+        "treatment_mean": {
+          "title": "Treatment Mean",
+          "type": "number"
+        },
+        "absolute_lift": {
+          "title": "Absolute Lift",
+          "type": "number"
+        },
+        "relative_lift": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fractional change: absolute_lift / control_mean. None when control_mean is zero (ratio is undefined, not zero).",
+          "title": "Relative Lift"
+        },
+        "p_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "P Value"
+        },
+        "ci_lower": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Lower"
+        },
+        "ci_upper": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Upper"
+        },
+        "is_significant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Significant"
+        }
+      },
+      "required": [
+        "metric_name",
+        "control_mean",
+        "treatment_mean",
+        "absolute_lift"
+      ],
+      "title": "MetricEstimate",
+      "type": "object"
+    },
+    "MetricSpec": {
+      "description": "Typed specification for a single secondary or guardrail metric.\n\nAccepts either a plain string shorthand (name only, type inferred as\n``continuous``) or a full object so callers can be explicit.\n\nExamples::\n\n    # shorthand \u2014 converted automatically\n    \"revenue_per_user\"\n\n    # full spec\n    {\"name\": \"revenue_per_user\", \"metric_type\": \"continuous\"}",
+      "properties": {
+        "name": {
+          "description": "Canonical metric name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "metric_type": {
+          "$ref": "#/$defs/MetricType",
+          "default": "continuous",
+          "description": "Statistical type for this metric. Defaults to 'continuous' when not specified. Set to 'proportion' for binary or rate metrics."
+        },
+        "is_guardrail": {
+          "default": false,
+          "description": "True when this metric is used as a guardrail.",
+          "title": "Is Guardrail",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional human-readable description.",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "MetricSpec",
+      "type": "object"
+    },
+    "MetricType": {
+      "description": "Statistical type of the primary metric. Drives test selection.",
+      "enum": [
+        "proportion",
+        "continuous"
+      ],
+      "title": "MetricType",
+      "type": "string"
+    },
+    "QualityChecks": {
+      "description": "Container for all assignment and metric QA results.",
+      "properties": {
+        "srm_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SrmCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "balance_checks": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Balance Checks",
+          "type": "array"
+        },
+        "missingness_checks": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Missingness Checks",
+          "type": "array"
+        },
+        "join_integrity_checks": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Join Integrity Checks",
+          "type": "array"
+        },
+        "guardrail_status": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Guardrail Status",
+          "type": "array"
+        }
+      },
+      "title": "QualityChecks",
+      "type": "object"
+    },
+    "RunStatus": {
+      "description": "Overall status of a result payload.",
+      "enum": [
+        "success",
+        "warning",
+        "failed"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "SpecValidation": {
+      "description": "Output from experiment config validation.",
+      "properties": {
+        "is_valid": {
+          "title": "Is Valid",
+          "type": "boolean"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "normalized_config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExperimentConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "is_valid"
+      ],
+      "title": "SpecValidation",
+      "type": "object"
+    },
+    "SrmCheck": {
+      "description": "Full SRM diagnostic result.\n\nSeverity is determined by the joint p-value + drift rule from 03-schemas.md.\nNever classified by p-value alone.",
+      "properties": {
+        "severity": {
+          "$ref": "#/$defs/SrmSeverity"
+        },
+        "chi2_stat": {
+          "title": "Chi2 Stat",
+          "type": "number"
+        },
+        "p_value": {
+          "title": "P Value",
+          "type": "number"
+        },
+        "srm_alpha_used": {
+          "title": "Srm Alpha Used",
+          "type": "number"
+        },
+        "observed_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Observed Counts",
+          "type": "object"
+        },
+        "expected_counts": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Expected Counts",
+          "type": "object"
+        },
+        "observed_allocation": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Observed Allocation",
+          "type": "object"
+        },
+        "expected_allocation": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Expected Allocation",
+          "type": "object"
+        },
+        "max_absolute_drift": {
+          "title": "Max Absolute Drift",
+          "type": "number"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "title": "Issues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "severity",
+        "chi2_stat",
+        "p_value",
+        "srm_alpha_used",
+        "observed_counts",
+        "expected_counts",
+        "observed_allocation",
+        "expected_allocation",
+        "max_absolute_drift",
+        "explanation"
+      ],
+      "title": "SrmCheck",
+      "type": "object"
+    },
+    "SrmSeverity": {
+      "description": "Trust classification for the SRM check result.",
+      "enum": [
+        "pass",
+        "warning",
+        "critical"
+      ],
+      "title": "SrmSeverity",
+      "type": "string"
+    }
+  },
+  "description": "Canonical output of an analysis run.\n\nThis is the single contract between abkit-core and all downstream consumers\n(Streamlit app, skills, templates). Any consumer must not re-implement the\nlogic that produced these values.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "experiment_id": {
+      "title": "Experiment Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunStatus"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "spec_validation": {
+      "$ref": "#/$defs/SpecValidation"
+    },
+    "duration_plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DurationPlan"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "quality_checks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QualityChecks"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "analysis": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AnalysisResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DecisionMemo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "artifacts": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifacts"
+    }
+  },
+  "required": [
+    "experiment_id",
+    "run_id",
+    "status",
+    "generated_at",
+    "spec_validation"
+  ],
+  "title": "ResultPayload",
+  "type": "object"
+}

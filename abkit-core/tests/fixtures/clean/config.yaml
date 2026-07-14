@@ -1,0 +1,33 @@
+schema_version: "1.0"
+experiment_name: "Checkout button redesign"
+experiment_id: "exp_clean_001"
+owner: "growth-data-science"
+hypothesis: "A more prominent checkout CTA will increase conversion rate."
+primary_metric: "conversion_rate"
+metric_type: "proportion"
+secondary_metrics:
+  - "revenue_per_user"
+guardrail_metrics:
+  - "refund_rate"
+variants:
+  - "control"
+  - "treatment"
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.02
+srm_alpha: 0.01
+pre_period_window_days: 14
+analysis_window_days: 14
+daily_eligible_traffic: 5000
+eligibility_rate: 0.6
+traffic_cap: 1.0
+ramp_up_days: 2
+planning_buffer_pct: 0.15
+segments:
+  - "country"
+  - "device_type"
+notes: "Scenario A — clean experiment with balanced assignment and CUPED-ready data."

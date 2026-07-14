@@ -1,0 +1,270 @@
+{
+  "$defs": {
+    "MetricType": {
+      "description": "Statistical type of the primary metric. Drives test selection.",
+      "enum": [
+        "proportion",
+        "continuous"
+      ],
+      "title": "MetricType",
+      "type": "string"
+    }
+  },
+  "description": "Schema version 1.0 \u2014 canonical experiment configuration for abkit. Generated from abkit_core.schemas.ExperimentConfig.",
+  "properties": {
+    "schema_version": {
+      "description": "Version of the config structure.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "experiment_name": {
+      "description": "Human-readable experiment name.",
+      "title": "Experiment Name",
+      "type": "string"
+    },
+    "experiment_id": {
+      "description": "Stable identifier for the experiment.",
+      "title": "Experiment Id",
+      "type": "string"
+    },
+    "owner": {
+      "description": "Primary owner or team.",
+      "title": "Owner",
+      "type": "string"
+    },
+    "hypothesis": {
+      "description": "Short statement of expected impact.",
+      "title": "Hypothesis",
+      "type": "string"
+    },
+    "primary_metric": {
+      "description": "Canonical name of the main success metric.",
+      "title": "Primary Metric",
+      "type": "string"
+    },
+    "metric_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MetricType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Statistical type of the primary metric: 'proportion' or 'continuous'. Required for analysis runs; optional for spec-validation-only runs."
+    },
+    "variants": {
+      "description": "Allowed variant names, e.g. ['control', 'treatment'].",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2,
+      "title": "Variants",
+      "type": "array"
+    },
+    "expected_allocation": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "Planned traffic split by variant. Values must sum to 1.0.",
+      "title": "Expected Allocation",
+      "type": "object"
+    },
+    "unit_of_randomization": {
+      "description": "Unit assigned to variants, e.g. 'user_id' or 'session_id'.",
+      "title": "Unit Of Randomization",
+      "type": "string"
+    },
+    "alpha": {
+      "description": "Significance threshold used for planning or reporting.",
+      "exclusiveMaximum": 1,
+      "exclusiveMinimum": 0,
+      "title": "Alpha",
+      "type": "number"
+    },
+    "power": {
+      "description": "Desired statistical power for planning.",
+      "exclusiveMaximum": 1,
+      "exclusiveMinimum": 0,
+      "title": "Power",
+      "type": "number"
+    },
+    "mde": {
+      "description": "Minimum detectable effect for planning.",
+      "exclusiveMinimum": 0,
+      "title": "Mde",
+      "type": "number"
+    },
+    "secondary_metrics": {
+      "description": "Additional metrics of interest.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Secondary Metrics",
+      "type": "array"
+    },
+    "guardrail_metrics": {
+      "description": "Metrics used to detect harmful side effects.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Guardrail Metrics",
+      "type": "array"
+    },
+    "segments": {
+      "description": "Segment dimensions to analyze, e.g. ['country', 'device_type'].",
+      "items": {
+        "type": "string"
+      },
+      "title": "Segments",
+      "type": "array"
+    },
+    "pre_period_window_days": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Number of days used for CUPED covariates.",
+      "title": "Pre Period Window Days"
+    },
+    "analysis_window_days": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Planned experiment window in days.",
+      "title": "Analysis Window Days"
+    },
+    "srm_alpha": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-experiment SRM detection threshold. Overrides the global default of 0.01. Must be between 0.001 and 0.1.",
+      "title": "Srm Alpha"
+    },
+    "daily_eligible_traffic": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Expected number of eligible units entering the experiment per day.",
+      "title": "Daily Eligible Traffic"
+    },
+    "eligibility_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Fraction of total traffic that is eligible. Between 0 and 1 exclusive.",
+      "title": "Eligibility Rate"
+    },
+    "traffic_cap": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Maximum fraction of eligible traffic to route to the experiment. Between 0 and 1 exclusive. Defaults to 1.0 when not set.",
+      "title": "Traffic Cap"
+    },
+    "ramp_up_days": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Days before full traffic allocation is reached. Treated as a planning buffer, not a novelty-effect model.",
+      "title": "Ramp Up Days"
+    },
+    "planning_buffer_pct": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Additional fractional buffer on the planned duration. e.g. 0.2 adds 20 percent.",
+      "title": "Planning Buffer Pct"
+    },
+    "exclusion_rules": {
+      "description": "Plain-language exclusions or filter notes.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Exclusion Rules",
+      "type": "array"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Free-form context.",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "schema_version",
+    "experiment_name",
+    "experiment_id",
+    "owner",
+    "hypothesis",
+    "primary_metric",
+    "variants",
+    "expected_allocation",
+    "unit_of_randomization",
+    "alpha",
+    "power",
+    "mde"
+  ],
+  "title": "ExperimentConfig",
+  "type": "object"
+}
