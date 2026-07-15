@@ -269,13 +269,13 @@ intentionally deferred.
 
 ## About the Authors
 
-**Vaisakhi Mishra** — Data Scientist / Researcher
+**Vaisakhi Mishra** — AI Engineer - Data Scientist
 
-- LinkedIn: [vaisakhi-mishra](https://www.linkedin.com/in/vaisakhi-mishra/)
+- LinkedIn: [(https://www.linkedin.com/in/vaisakhi-mishra/](https://www.linkedin.com/in/vaisakhi-mishra/)
 
-**Jagannathan Ramanujam** — Data Scientist / Researcher
+**Jagannathan Ramanujam** — Software Engineer - DevOps
 
-- LinkedIn: [rjagannathan23](https://www.linkedin.com/in/rjagannathan23/)
+- LinkedIn: [https://www.linkedin.com/in/rjagannathan23/](https://www.linkedin.com/in/rjagannathan23/)
 
 ---
 
