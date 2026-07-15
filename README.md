@@ -7,6 +7,8 @@ communicating online experiments. It is built for researchers, data scientists, 
 
 ## What it is
 
+![abkit architecture diagram](abkit_diagram.png)
+
 abkit accelerates the highest-friction steps around trustworthy
 experimentation:
 
@@ -262,3 +264,21 @@ addressed in this release:
 
 See [`LOCAL_RUN.md`](LOCAL_RUN.md) for additional UX rough edges that are
 intentionally deferred.
+
+---
+
+## About the Authors
+
+**Vaisakhi Mishra** — Data Scientist / Researcher
+
+- LinkedIn: [vaisakhi-mishra](https://www.linkedin.com/in/vaisakhi-mishra/)
+
+**Jagannathan Ramanujam** — Data Scientist / Researcher
+
+- LinkedIn: [rjagannathan23](https://www.linkedin.com/in/rjagannathan23/)
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
