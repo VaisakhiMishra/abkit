@@ -1,0 +1,29 @@
+schema_version: "1.2"
+experiment_name: "Bonferroni ON fixture"
+experiment_id: "exp_bonf_on_001"
+owner: "experiments@example.com"
+hypothesis: "Treatment increases conversion value. Bonferroni correction is applied to three secondary metrics (metric_a, metric_b, metric_c), each tested at alpha/3 instead of alpha."
+unit_of_randomization: "user_id"
+variants:
+  - control
+  - treatment
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+primary_metric: "conversion_value"
+metric_type: "continuous"
+secondary_metrics:
+  - "metric_a"
+  - "metric_b"
+  - "metric_c"
+guardrail_metrics:
+  - "activation_rate"
+# No guardrail_directions — activation_rate uses legacy any-movement blocking
+# (not triggered because activation_rate is constant in this fixture)
+apply_bonferroni_correction: true
+# With m=3 secondary metrics: secondary_alpha = 0.05 / 3 ≈ 0.0167
+alpha: 0.05
+power: 0.80
+mde: 0.02
+srm_alpha: 0.01
+notes: "Scenario E — Bonferroni ON. Primary is strongly significant. Secondary metrics tested at alpha/3=0.0167. Guardrail activation_rate is constant (not significant). Decision: ship."

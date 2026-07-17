@@ -22,14 +22,20 @@ Statistical scope and assumptions
    ``metric_type`` field controls which test is chosen.
 
 3. Two-sided tests at the ``alpha`` declared in the experiment config.  No
-   one-sided tests, no sequential corrections, no multiple-comparison
-   adjustments for secondary / guardrail metrics.  These are explicit v1
-   simplifications — documented in returned caveats.
+   one-sided tests, no sequential corrections.  Optional Bonferroni correction
+   for secondary metrics is available via ``apply_bonferroni_correction`` in
+   the experiment config.  Guardrail metrics are always tested at the base
+   ``alpha``.  Primary metric is always tested at the base ``alpha``.
 
 4. Confidence intervals are computed as:
    - Continuous: Welch CI (mean difference ± t_crit * SE_welch).
    - Proportion:  Normal CI (proportion difference ± z_crit * SE_pooled_or_unpooled).
-   Both are 1-alpha two-sided intervals.
+   Both are 1-alpha two-sided intervals, where alpha is the value passed into
+   _compute_metric_estimate.  For secondary metrics this is ``secondary_alpha``
+   when Bonferroni correction is active, so the CI width is already consistent
+   with the corrected threshold.  The ``is_significant`` flag on each
+   MetricEstimate is also evaluated against the same passed-in alpha, so there
+   is no mismatch between the CI and the significance flag for any metric.
 
 5. Secondary and guardrail metrics are always analysed with Welch t-test
    regardless of their declared metric_type.  v1 does not plumb per-secondary
@@ -47,9 +53,18 @@ Statistical scope and assumptions
    - SRM warning   → ship/hold/rerun/inconclusive with caveat surfaced
    - Primary metric significant AND no guardrail failures → ship
    - Primary metric not significant                      → inconclusive
-   - Guardrail metric significant in harmful direction   → hold
-   (Guardrail directionality is not modelled — any significant guardrail
-    movement triggers a hold.  Analysts should review the direction manually.)
+   - Guardrail metric triggered (see rule below)         → hold
+
+   Guardrail blocking rule (direction-aware, introduced in schema v1.1):
+   - If the guardrail is not statistically significant → does not block.
+   - If significant AND the metric has no declared direction (or direction
+     is ``flat``) → any significant movement blocks (legacy v1 behaviour).
+   - If significant AND direction is ``increase`` → blocks only when
+     absolute_lift < 0 (negative lift violates the desired increase).
+   - If significant AND direction is ``decrease`` → blocks only when
+     absolute_lift > 0 (positive lift violates the desired decrease).
+   - If absolute_lift is None (edge-case: zero observations) → blocks
+     conservatively regardless of declared direction.
 
 8. Zero-variance policy (degenerate test-data edge cases only):
    Real experiment data always has within-group variance.  When synthetic or
@@ -82,6 +97,7 @@ from abkit_core.schemas import (
     DecisionMemo,
     DecisionRecommendation,
     ExperimentConfig,
+    GuardrailDirection,
     IssueSeverity,
     MetricEstimate,
     MetricType,
@@ -187,6 +203,18 @@ def run_analysis(
             )
 
     # 3. Secondary metrics
+    # Bonferroni correction: if enabled and m >= 2 secondary metrics are
+    # declared, test each at alpha / m.  When m == 1 the correction has no
+    # mathematical effect (alpha / 1 == alpha), so we leave the flag False to
+    # avoid misleading downstream consumers.  Primary and guardrail metrics
+    # are always tested at the base alpha — this logic is intentionally
+    # isolated to the secondary-metric loop only.
+    m_secondary = len(config.secondary_metrics)
+    bonferroni_applies = (
+        config.apply_bonferroni_correction and m_secondary >= 2
+    )
+    secondary_alpha = config.alpha / m_secondary if bonferroni_applies else config.alpha
+
     declared_secondary = {m.name for m in config.secondary_metrics}
     observed_metrics   = set(
         metrics[metrics["period"] == "post"]["metric_name"].dropna().unique()
@@ -199,7 +227,7 @@ def run_analysis(
             metric_name=mname,
             # Secondary metrics always run as continuous in v1 — see module docstring.
             metric_type=MetricType.continuous,
-            alpha=config.alpha,
+            alpha=secondary_alpha,
             control_variant=control_variant,
             treatment_variant=treatment_variant,
         )
@@ -234,6 +262,8 @@ def run_analysis(
         guardrail_metric_results=guardrail_results,
         cuped_estimate=cuped_estimate,
         cuped_readiness=cuped_readiness,
+        secondary_alpha_used=secondary_alpha if m_secondary > 0 else None,
+        bonferroni_correction_applied=bonferroni_applies,
     )
 
     # 5. Decision memo
@@ -554,6 +584,52 @@ def _has_pre_period_data(metrics: pd.DataFrame, metric_name: str) -> bool:
 # Private: decision memo
 # ---------------------------------------------------------------------------
 
+def _guardrail_blocks(
+    estimate: MetricEstimate,
+    direction: GuardrailDirection | None,
+) -> bool:
+    """
+    Return True when this guardrail estimate should trigger a HOLD.
+
+    Rules:
+    - If the estimate is not statistically significant → False (does not block).
+    - If absolute_lift is None (undefined — edge case with zero observations) →
+      True conservatively, regardless of declared direction.
+    - If direction is None or ``flat`` → any significant movement blocks
+      (legacy v1 behaviour for undeclared guardrails).
+    - If direction is ``increase`` → blocks only when absolute_lift < 0
+      (negative movement violates the "should go up" intention).
+    - If direction is ``decrease`` → blocks only when absolute_lift > 0
+      (positive movement violates the "should go down" intention).
+
+    Args:
+        estimate: A computed MetricEstimate for a guardrail metric.
+        direction: The declared GuardrailDirection for this metric, or None
+                   when the metric was not listed in guardrail_directions.
+    """
+    if estimate.is_significant is not True:
+        return False
+
+    # Conservative fallback: undefined lift blocks.
+    if estimate.absolute_lift is None:
+        return True
+
+    if direction is None or direction == GuardrailDirection.flat:
+        # Legacy behaviour: any significant movement is a problem.
+        return True
+
+    if direction == GuardrailDirection.increase:
+        # Only harmful when lift is negative (going the wrong way).
+        return estimate.absolute_lift < 0
+
+    if direction == GuardrailDirection.decrease:
+        # Only harmful when lift is positive (going the wrong way).
+        return estimate.absolute_lift > 0
+
+    # Unreachable — all enum values are handled above.
+    return True  # pragma: no cover
+
+
 def _build_decision(
     effective_primary: MetricEstimate | None,
     cuped_was_applied: bool,
@@ -575,15 +651,14 @@ def _build_decision(
 
     Rules (evaluated in priority order):
       1. SRM critical → hold, regardless of metric results.
-      2. Any significant guardrail movement → hold.
-         (v1 does not model direction; any significant guardrail triggers hold.)
+      2. Guardrail metric blocks (direction-aware) → hold.
+         Whether a significant guardrail blocks depends on its declared direction
+         in config.guardrail_directions.  See ``_guardrail_blocks`` for the full
+         rule table.  Guardrails with no declared direction retain v1 behaviour:
+         any significant movement triggers a hold.
       3. Primary metric significant → ship (with SRM warning caveat if present).
       4. Primary metric not significant → inconclusive.
       5. No primary metric result (e.g. empty data) → inconclusive.
-
-    Note on rule 2: guardrail directionality is a known v1 simplification.
-    The analyst should always inspect the guardrail estimate direction before
-    acting on a hold recommendation generated by this rule.
     """
     caveats:      list[str] = []
     next_actions: list[str] = []
@@ -625,20 +700,38 @@ def _build_decision(
             alpha_used=config.alpha,
         )
 
-    # --- Guardrail gate ---
-    significant_guardrails = [
-        g for g in guardrail_results if g.is_significant is True
+    # --- Guardrail gate (direction-aware) ---
+    directions = config.guardrail_directions  # dict[str, GuardrailDirection]
+    blocking_guardrails = [
+        g for g in guardrail_results
+        if _guardrail_blocks(g, directions.get(g.metric_name))
     ]
-    if significant_guardrails:
-        guardrail_names = [g.metric_name for g in significant_guardrails]
+    if blocking_guardrails:
+        blocking_names = [g.metric_name for g in blocking_guardrails]
+
+        # Build per-metric reason lines for the caveats section.
+        reason_lines: list[str] = []
+        for g in blocking_guardrails:
+            dir_ = directions.get(g.metric_name)
+            lift_str = (
+                f"{g.absolute_lift:+.6f}"
+                if g.absolute_lift is not None
+                else "undefined"
+            )
+            if dir_ is None or dir_ == GuardrailDirection.flat:
+                why = "any significant movement is a violation (no direction declared)"
+            elif dir_ == GuardrailDirection.increase:
+                why = f"desired direction is 'increase' but lift={lift_str} is negative"
+            else:  # decrease
+                why = f"desired direction is 'decrease' but lift={lift_str} is positive"
+            reason_lines.append(f"{g.metric_name}: {why}")
+
         caveats.append(
-            f"Significant movement detected in guardrail metric(s): "
-            f"{guardrail_names}. "
-            "Check the direction of each guardrail before making a ship decision. "
-            "(v1 does not model guardrail direction automatically.)"
+            "Guardrail metric(s) triggered a hold:\n"
+            + "\n".join(f"  • {r}" for r in reason_lines)
         )
         next_actions.append(
-            f"Manually review direction of guardrail metrics: {guardrail_names}."
+            f"Investigate guardrail metric(s) before shipping: {blocking_names}."
         )
         if srm_warning:
             next_actions.append("Review SRM warning before shipping.")
@@ -646,8 +739,8 @@ def _build_decision(
         return DecisionMemo(
             recommendation=DecisionRecommendation.hold,
             reasoning_summary=(
-                f"Guardrail metric(s) {guardrail_names} show significant movement. "
-                "Manual review of impact direction required before any ship decision."
+                f"Guardrail metric(s) {blocking_names} violated their declared direction. "
+                + "; ".join(reason_lines)
             ),
             key_caveats=caveats,
             next_actions=next_actions,

@@ -114,10 +114,12 @@ _sidebar_status()
 # Sample config download
 # ---------------------------------------------------------------------------
 _SAMPLE_CONFIG_YAML = """\
-schema_version: "1.0"
+schema_version: "1.2"
 experiment_id: <your-experiment-id>
 experiment_name: <Human-readable experiment name>
 owner: <owner-email-or-team>
+hypothesis: <Short statement of the expected mechanism and direction of the effect.>
+unit_of_randomization: user_id   # e.g. user_id, session_id, device_id
 
 # Variant names — first entry is treated as the control
 variants:
@@ -133,27 +135,36 @@ expected_allocation:
 primary_metric: <primary_metric_name>
 metric_type: <proportion|continuous>  # choose one
 
-# Optional secondary metrics
+# Optional secondary metrics (plain string → inferred as continuous)
 secondary_metrics:
   - <secondary_metric_name_1>
   - <secondary_metric_name_2>
 
-# Optional guardrail metrics
+# Optional guardrail metrics (plain string → inferred as continuous)
 guardrail_metrics:
-  - name: <guardrail_metric_name>
+  - <guardrail_metric_name>
+
+# Optional: declare desired direction per guardrail (increase | decrease | flat)
+# Keys must match names in guardrail_metrics above.
+# When omitted, any significant movement triggers a hold.
+guardrail_directions:
+  <guardrail_metric_name>: <increase|decrease|flat>
+
+# Optional: Bonferroni correction for secondary metrics (default: false)
+apply_bonferroni_correction: false
 
 # Statistical parameters
 alpha: 0.05
 power: 0.8
-mde: 0.02         # Minimum detectable effect (absolute)
+mde: 0.02         # Minimum detectable effect (absolute for continuous; relative for proportion)
 srm_alpha: 0.01   # SRM chi-squared test threshold
 
 # Duration planning fields (optional — remove if not needed)
 daily_eligible_traffic: <integer>  # e.g. 10000
-traffic_cap: 1.0                   # fraction of traffic in experiment
+traffic_cap: 1.0                   # fraction of eligible traffic in experiment (0, 1]
 ramp_up_days: 0
 planning_buffer_pct: 0.1
-eligibility_rate: null             # e.g. 0.8 or null
+eligibility_rate: null             # fraction of total traffic that is eligible, e.g. 0.8 or null
 """
 
 st.title("1 · Setup")
@@ -298,7 +309,7 @@ with tab_paste:
     pasted = st.text_area(
         "Paste YAML here",
         height=300,
-        placeholder="schema_version: \"1.0\"\nexperiment_id: ...",
+        placeholder="schema_version: \"1.2\"\nexperiment_id: ...",
     )
     if pasted.strip():
         # Gap 5: pasted text replacing a different config invalidates downstream.

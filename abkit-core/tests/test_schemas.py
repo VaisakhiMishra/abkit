@@ -427,7 +427,9 @@ class TestDurationPlanOrdering:
 # ---------------------------------------------------------------------------
 
 class TestFixtureFiles:
-    @pytest.mark.parametrize("scenario", ["clean", "srm", "weak_cuped"])
+    @pytest.mark.parametrize("scenario", [
+        "clean", "srm", "weak_cuped", "guardrail_ship", "bonferroni_on", "bonferroni_off",
+    ])
     def test_config_yaml_parses(self, scenario):
         """Each fixture config.yaml must parse into a valid ExperimentConfig."""
         path = FIXTURES / scenario / "config.yaml"
@@ -437,7 +439,9 @@ class TestFixtureFiles:
         cfg = ExperimentConfig(**data)
         assert cfg.experiment_id is not None
 
-    @pytest.mark.parametrize("scenario", ["clean", "srm", "weak_cuped"])
+    @pytest.mark.parametrize("scenario", [
+        "clean", "srm", "weak_cuped", "guardrail_ship", "bonferroni_on", "bonferroni_off",
+    ])
     def test_assignment_csv_has_required_columns(self, scenario):
         path = FIXTURES / scenario / "assignments.csv"
         assert path.exists(), f"{path} does not exist"
@@ -447,7 +451,9 @@ class TestFixtureFiles:
         issues = validate_assignment_columns(cols)
         assert issues == [], f"Scenario {scenario} assignment CSV missing columns: {issues}"
 
-    @pytest.mark.parametrize("scenario", ["clean", "srm", "weak_cuped"])
+    @pytest.mark.parametrize("scenario", [
+        "clean", "srm", "weak_cuped", "guardrail_ship", "bonferroni_on", "bonferroni_off",
+    ])
     def test_metric_csv_has_required_columns(self, scenario):
         path = FIXTURES / scenario / "metrics.csv"
         assert path.exists(), f"{path} does not exist"
@@ -783,3 +789,159 @@ class TestMetricEstimateRelativeLift:
         assert est_zero.relative_lift == 0.0
         assert est_none.relative_lift is None
         assert est_zero.relative_lift != est_none.relative_lift
+
+
+# ---------------------------------------------------------------------------
+# GuardrailDirection and guardrail_directions field (schema v1.1)
+# ---------------------------------------------------------------------------
+
+class TestGuardrailDirections:
+    """
+    Tests for the new guardrail_directions field on ExperimentConfig.
+
+    Covers:
+    - Valid configurations are accepted.
+    - Enum serialises as string values.
+    - Unknown metric names in guardrail_directions raise ValidationError.
+    - Empty dict (omitted) is the default and does not error.
+    - All three allowed values ('increase', 'decrease', 'flat') are accepted.
+    - Mixed configs with some metrics having directions and others not are valid.
+    """
+
+    def test_guardrail_directions_empty_by_default(self):
+        """When omitted, guardrail_directions defaults to an empty dict."""
+        cfg = ExperimentConfig(**_minimal_config())
+        assert cfg.guardrail_directions == {}
+
+    def test_guardrail_directions_increase_accepted(self):
+        """direction='increase' is a valid value."""
+        from abkit_core.schemas import GuardrailDirection
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["revenue"],
+            guardrail_directions={"revenue": "increase"},
+        ))
+        assert cfg.guardrail_directions["revenue"] == GuardrailDirection.increase
+
+    def test_guardrail_directions_decrease_accepted(self):
+        """direction='decrease' is a valid value."""
+        from abkit_core.schemas import GuardrailDirection
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["refund_rate"],
+            guardrail_directions={"refund_rate": "decrease"},
+        ))
+        assert cfg.guardrail_directions["refund_rate"] == GuardrailDirection.decrease
+
+    def test_guardrail_directions_flat_accepted(self):
+        """direction='flat' is a valid value."""
+        from abkit_core.schemas import GuardrailDirection
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["session_length"],
+            guardrail_directions={"session_length": "flat"},
+        ))
+        assert cfg.guardrail_directions["session_length"] == GuardrailDirection.flat
+
+    def test_guardrail_directions_invalid_value_raises(self):
+        """A direction string that is not 'increase', 'decrease', or 'flat' must raise."""
+        with pytest.raises(ValidationError):
+            ExperimentConfig(**_minimal_config(
+                guardrail_metrics=["revenue"],
+                guardrail_directions={"revenue": "up"},  # not a valid enum value
+            ))
+
+    def test_guardrail_directions_unknown_metric_raises(self):
+        """
+        A key in guardrail_directions that is not in guardrail_metrics must raise
+        ValidationError (caught by the _check_guardrail_directions_keys validator).
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            ExperimentConfig(**_minimal_config(
+                guardrail_metrics=["revenue"],
+                guardrail_directions={"typo_metric": "decrease"},
+            ))
+        assert "guardrail_directions" in str(exc_info.value).lower() or \
+               "guardrail_metrics" in str(exc_info.value).lower()
+
+    def test_guardrail_directions_subset_of_guardrails_is_valid(self):
+        """
+        Not all guardrail metrics need a declared direction.
+        A subset is perfectly valid.
+        """
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["revenue", "refund_rate", "error_rate"],
+            guardrail_directions={"refund_rate": "decrease"},  # only one declared
+        ))
+        assert "refund_rate" in cfg.guardrail_directions
+        assert "revenue" not in cfg.guardrail_directions
+        assert "error_rate" not in cfg.guardrail_directions
+
+    def test_guardrail_directions_all_metrics_can_have_direction(self):
+        """All guardrail metrics may have a declared direction."""
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["revenue", "refund_rate"],
+            guardrail_directions={
+                "revenue": "increase",
+                "refund_rate": "decrease",
+            },
+        ))
+        assert len(cfg.guardrail_directions) == 2
+
+    def test_guardrail_directions_model_dump_emits_string_values(self):
+        """model_dump() must return string enum values for guardrail_directions."""
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["refund_rate"],
+            guardrail_directions={"refund_rate": "decrease"},
+        ))
+        dumped = cfg.model_dump()
+        assert dumped["guardrail_directions"]["refund_rate"] == "decrease", (
+            f"Expected 'decrease' string; got {dumped['guardrail_directions']['refund_rate']!r}"
+        )
+
+    def test_guardrail_directions_json_round_trip(self):
+        """JSON serialisation / deserialisation must preserve guardrail_directions."""
+        import json
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=["revenue", "refund_rate"],
+            guardrail_directions={
+                "revenue": "increase",
+                "refund_rate": "decrease",
+            },
+        ))
+        payload = json.loads(cfg.model_dump_json())
+        assert payload["guardrail_directions"]["revenue"] == "increase"
+        assert payload["guardrail_directions"]["refund_rate"] == "decrease"
+
+    def test_guardrail_directions_with_no_guardrail_metrics_and_empty_dict_valid(self):
+        """
+        When guardrail_metrics is empty and guardrail_directions is also empty,
+        no error should be raised.
+        """
+        cfg = ExperimentConfig(**_minimal_config(
+            guardrail_metrics=[],
+            guardrail_directions={},
+        ))
+        assert cfg.guardrail_directions == {}
+
+    def test_guardrail_directions_primary_metric_cannot_be_direction_key(self):
+        """
+        The primary metric cannot be in guardrail_metrics (enforced elsewhere),
+        and therefore also cannot be a key in guardrail_directions.
+        This confirms the interaction between the two validators.
+        """
+        with pytest.raises(ValidationError):
+            ExperimentConfig(**_minimal_config(
+                # primary_metric = 'conversion_rate' by default
+                guardrail_metrics=["conversion_rate"],  # already blocked by existing validator
+                guardrail_directions={"conversion_rate": "increase"},
+            ))
+
+    def test_guardrail_directions_loaded_from_fixture_yaml(self):
+        """
+        The clean fixture YAML now declares guardrail_directions.
+        It must parse correctly.
+        """
+        path = FIXTURES / "clean" / "config.yaml"
+        with path.open() as f:
+            data = yaml.safe_load(f)
+        cfg = ExperimentConfig(**data)
+        assert "refund_rate" in cfg.guardrail_directions
+        assert cfg.guardrail_directions["refund_rate"] == "decrease"

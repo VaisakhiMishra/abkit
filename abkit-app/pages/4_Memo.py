@@ -255,22 +255,42 @@ if analysis:
     # Guardrail metrics
     if analysis.guardrail_metric_results:
         st.markdown("### Guardrail metrics")
-        # Gap 10: add a standing note about direction not being modelled.
-        st.caption(
-            "ℹ️  Guardrail direction is **not modelled automatically**. "
-            "A significant guardrail triggers a hold regardless of direction. "
-            "Review the absolute lift for each metric before acting on the recommendation."
-        )
+
+        # Resolve declared directions from the config (schema v1.1).
+        # Falls back gracefully when cfg or guardrail_directions is absent.
+        directions: dict = {}
+        if cfg is not None and hasattr(cfg, "guardrail_directions"):
+            directions = cfg.guardrail_directions or {}
+
         for est in analysis.guardrail_metric_results:
+            p_str = f"{est.p_value:.4g}" if est.p_value is not None else "—"
+            dir_ = directions.get(est.metric_name)
+            dir_label = f" *(direction: {dir_})*" if dir_ else ""
+
             if est.is_significant is True:
-                sig = "🚨 significant — **review direction**"
+                # Work out whether the significant movement violates the direction.
+                lift = est.absolute_lift
+                if dir_ is None or str(dir_) == "flat":
+                    sig = "🚨 significant — blocks (no direction declared; any movement is a violation)"
+                elif str(dir_) == "increase":
+                    if lift is not None and lift < 0:
+                        sig = "🚨 significant — **blocks** (desired ↑ but lift is negative)"
+                    else:
+                        sig = "✅ significant — passes direction check (desired ↑, lift is positive)"
+                elif str(dir_) == "decrease":
+                    if lift is not None and lift > 0:
+                        sig = "🚨 significant — **blocks** (desired ↓ but lift is positive)"
+                    else:
+                        sig = "✅ significant — passes direction check (desired ↓, lift is negative)"
+                else:
+                    sig = "🚨 significant"
             elif est.is_significant is False:
                 sig = "— not significant"
             else:
                 sig = "— significance not computed"
-            p_str = f"{est.p_value:.4g}" if est.p_value is not None else "—"
+
             st.markdown(
-                f"- **{est.metric_name}**: "
+                f"- **{est.metric_name}**{dir_label}: "
                 f"abs_lift={est.absolute_lift:+.4g}, "
                 f"p={p_str} — {sig}"
             )

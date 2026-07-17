@@ -298,6 +298,14 @@ col_raw, col_adj = st.columns(2)
 with col_raw:
     st.markdown("##### Raw estimate")
     render_metric_estimate(raw, alpha=cfg.alpha)
+    if raw is None:
+        st.caption(
+            "Possible causes: no post-period rows in the metric CSV for "
+            f"`{cfg.primary_metric}`, or no unit_id overlap between the "
+            "assignments and metric CSVs after an inner join. "
+            "Check that the metric CSV contains a `period=post` row for "
+            f"`{cfg.primary_metric}` for each assigned unit."
+        )
 
 with col_adj:
     if cuped is not None:
@@ -349,18 +357,36 @@ if analysis_result.secondary_metric_results:
 if analysis_result.guardrail_metric_results:
     st.subheader("Guardrail metrics")
     render_metric_estimates_table(analysis_result.guardrail_metric_results, alpha=cfg.alpha)
-    any_sig = any(g.is_significant for g in analysis_result.guardrail_metric_results)
-    if any_sig:
+
+    # Resolve declared directions from the config for display.
+    directions: dict = {}
+    if cfg is not None and hasattr(cfg, "guardrail_directions"):
+        directions = cfg.guardrail_directions or {}
+
+    any_blocking = False
+    for g in analysis_result.guardrail_metric_results:
+        if not g.is_significant:
+            continue
+        dir_ = directions.get(g.metric_name)
+        from abkit_core.schemas import GuardrailDirection
+        # Mirrors _guardrail_blocks() in analysis.py
+        if dir_ is None or str(dir_) == "flat":
+            any_blocking = True
+        elif str(dir_) == "increase" and g.absolute_lift is not None and g.absolute_lift < 0:
+            any_blocking = True
+        elif str(dir_) == "decrease" and g.absolute_lift is not None and g.absolute_lift > 0:
+            any_blocking = True
+
+    if any_blocking:
         st.warning(
-            "⚠️  One or more guardrail metrics are significant. "
-            "**The direction is not modelled automatically** — inspect the absolute lift "
-            "above and decide manually whether this is a harmful movement before shipping."
+            "⚠️  One or more guardrail metrics violated their declared direction. "
+            "Review the decision above — `abkit-core` has already applied the direction-aware "
+            "blocking rule and set the recommendation accordingly."
         )
     else:
         st.caption(
-            "ℹ️  Guardrail direction is not modelled. "
-            "A significant guardrail in a beneficial direction may still trigger a hold — "
-            "review the estimates above."
+            "ℹ️  No guardrail violations. "
+            "Significant movement in the declared direction does not trigger a hold."
         )
 else:
     if cfg.guardrail_metrics:

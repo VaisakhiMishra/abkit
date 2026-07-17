@@ -69,6 +69,25 @@
           },
           "title": "Segment Summaries",
           "type": "array"
+        },
+        "secondary_alpha_used": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The significance threshold actually applied to secondary metrics. Equals config.alpha when Bonferroni correction is off or when there is only one secondary metric. Equals config.alpha / m when Bonferroni correction is on and m > 1 secondary metrics were declared. None when no secondary metrics were declared.",
+          "title": "Secondary Alpha Used"
+        },
+        "bonferroni_correction_applied": {
+          "default": false,
+          "description": "True when Bonferroni correction was enabled in the config AND at least two secondary metrics were declared (i.e. the adjusted alpha differs from the base alpha). False otherwise, including when correction is enabled but only one secondary metric is present.",
+          "title": "Bonferroni Correction Applied",
+          "type": "boolean"
         }
       },
       "title": "AnalysisResult",
@@ -427,6 +446,14 @@
           "title": "Guardrail Metrics",
           "type": "array"
         },
+        "guardrail_directions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/GuardrailDirection"
+          },
+          "description": "Optional map of guardrail metric name \u2192 desired direction. Allowed values: 'increase', 'decrease', 'flat'. When a guardrail metric is not listed here the legacy v1 behaviour applies: any statistically significant movement triggers a hold. Example: {\"revenue\": \"increase\", \"refund_rate\": \"decrease\"}.",
+          "title": "Guardrail Directions",
+          "type": "object"
+        },
         "segments": {
           "description": "Segment dimensions to analyze, e.g. ['country', 'device_type'].",
           "items": {
@@ -544,6 +571,12 @@
           "description": "Additional fractional buffer on the planned duration. e.g. 0.2 adds 20 percent.",
           "title": "Planning Buffer Pct"
         },
+        "apply_bonferroni_correction": {
+          "default": false,
+          "description": "When True, Bonferroni correction is applied to secondary metrics. If there are m secondary metrics, significance is tested at alpha / m rather than alpha. Has no effect when there are 0 or 1 secondary metrics. The primary metric is always tested at the declared alpha. Guardrail metrics are always tested at the declared alpha.",
+          "title": "Apply Bonferroni Correction",
+          "type": "boolean"
+        },
         "exclusion_rules": {
           "description": "Plain-language exclusions or filter notes.",
           "items": {
@@ -582,6 +615,16 @@
       ],
       "title": "ExperimentConfig",
       "type": "object"
+    },
+    "GuardrailDirection": {
+      "description": "Desired direction for a guardrail metric.\n\n``increase`` \u2014 the metric should go up (block only if lift is negative).\n``decrease`` \u2014 the metric should go down (block only if lift is positive).\n``flat``     \u2014 no movement is desired; any significant change blocks.\n\nWhen a guardrail metric is not listed in ``guardrail_directions`` on the\nconfig, the legacy v1 behaviour applies: any significant movement blocks.",
+      "enum": [
+        "increase",
+        "decrease",
+        "flat"
+      ],
+      "title": "GuardrailDirection",
+      "type": "string"
     },
     "IssueSeverity": {
       "description": "Severity level for a DiagnosticIssue.",
@@ -919,10 +962,10 @@
       "type": "string"
     }
   },
-  "description": "Canonical output of an analysis run.\n\nThis is the single contract between abkit-core and all downstream consumers\n(Streamlit app, skills, templates). Any consumer must not re-implement the\nlogic that produced these values.",
+  "description": "Schema version 1.2 \u2014 canonical result payload for abkit. Generated from abkit_core.schemas.ResultPayload.",
   "properties": {
     "schema_version": {
-      "default": "1.0",
+      "default": "1.2",
       "title": "Schema Version",
       "type": "string"
     },

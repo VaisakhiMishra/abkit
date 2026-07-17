@@ -5,6 +5,15 @@ Responsibility: accept a parsed ExperimentConfig, run all business-rule
 checks, and return a SpecValidation result.
 
 No statistical computation lives here. No I/O. No Streamlit imports.
+
+Guardrail direction validation
+-------------------------------
+The ``guardrail_directions`` field added in schema v1.1 is validated at the
+Pydantic level (unknown metric names raise ValidationError at construction
+time).  Design-quality warnings beyond that (e.g. guardrails that have no
+declared direction) are intentionally omitted: undeclared directions fall back
+gracefully to the legacy "any significant movement blocks" behaviour, so there
+is nothing structurally wrong with omitting them.
 """
 
 from __future__ import annotations

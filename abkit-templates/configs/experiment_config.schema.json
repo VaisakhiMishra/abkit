@@ -1,5 +1,54 @@
 {
   "$defs": {
+    "GuardrailDirection": {
+      "description": "Desired direction for a guardrail metric.\n\n``increase`` \u2014 the metric should go up (block only if lift is negative).\n``decrease`` \u2014 the metric should go down (block only if lift is positive).\n``flat``     \u2014 no movement is desired; any significant change blocks.\n\nWhen a guardrail metric is not listed in ``guardrail_directions`` on the\nconfig, the legacy v1 behaviour applies: any significant movement blocks.",
+      "enum": [
+        "increase",
+        "decrease",
+        "flat"
+      ],
+      "title": "GuardrailDirection",
+      "type": "string"
+    },
+    "MetricSpec": {
+      "description": "Typed specification for a single secondary or guardrail metric.\n\nAccepts either a plain string shorthand (name only, type inferred as\n``continuous``) or a full object so callers can be explicit.\n\nExamples::\n\n    # shorthand \u2014 converted automatically\n    \"revenue_per_user\"\n\n    # full spec\n    {\"name\": \"revenue_per_user\", \"metric_type\": \"continuous\"}",
+      "properties": {
+        "name": {
+          "description": "Canonical metric name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "metric_type": {
+          "$ref": "#/$defs/MetricType",
+          "default": "continuous",
+          "description": "Statistical type for this metric. Defaults to 'continuous' when not specified. Set to 'proportion' for binary or rate metrics."
+        },
+        "is_guardrail": {
+          "default": false,
+          "description": "True when this metric is used as a guardrail.",
+          "title": "Is Guardrail",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional human-readable description.",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "MetricSpec",
+      "type": "object"
+    },
     "MetricType": {
       "description": "Statistical type of the primary metric. Drives test selection.",
       "enum": [
@@ -10,7 +59,7 @@
       "type": "string"
     }
   },
-  "description": "Schema version 1.0 \u2014 canonical experiment configuration for abkit. Generated from abkit_core.schemas.ExperimentConfig.",
+  "description": "Schema version 1.2 \u2014 canonical experiment configuration for abkit. Generated from abkit_core.schemas.ExperimentConfig.",
   "properties": {
     "schema_version": {
       "description": "Version of the config structure.",
@@ -97,20 +146,28 @@
       "type": "number"
     },
     "secondary_metrics": {
-      "description": "Additional metrics of interest.",
+      "description": "Additional metrics of interest. Each entry may be a plain string (name only) or a full MetricSpec object.",
       "items": {
-        "type": "string"
+        "$ref": "#/$defs/MetricSpec"
       },
       "title": "Secondary Metrics",
       "type": "array"
     },
     "guardrail_metrics": {
-      "description": "Metrics used to detect harmful side effects.",
+      "description": "Metrics used to detect harmful side effects. Each entry may be a plain string (name only) or a full MetricSpec object.",
       "items": {
-        "type": "string"
+        "$ref": "#/$defs/MetricSpec"
       },
       "title": "Guardrail Metrics",
       "type": "array"
+    },
+    "guardrail_directions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/GuardrailDirection"
+      },
+      "description": "Optional map of guardrail metric name \u2192 desired direction. Allowed values: 'increase', 'decrease', 'flat'. When a guardrail metric is not listed here the legacy v1 behaviour applies: any statistically significant movement triggers a hold. Example: {\"revenue\": \"increase\", \"refund_rate\": \"decrease\"}.",
+      "title": "Guardrail Directions",
+      "type": "object"
     },
     "segments": {
       "description": "Segment dimensions to analyze, e.g. ['country', 'device_type'].",
@@ -228,6 +285,12 @@
       "default": null,
       "description": "Additional fractional buffer on the planned duration. e.g. 0.2 adds 20 percent.",
       "title": "Planning Buffer Pct"
+    },
+    "apply_bonferroni_correction": {
+      "default": false,
+      "description": "When True, Bonferroni correction is applied to secondary metrics. If there are m secondary metrics, significance is tested at alpha / m rather than alpha. Has no effect when there are 0 or 1 secondary metrics. The primary metric is always tested at the declared alpha. Guardrail metrics are always tested at the declared alpha.",
+      "title": "Apply Bonferroni Correction",
+      "type": "boolean"
     },
     "exclusion_rules": {
       "description": "Plain-language exclusions or filter notes.",

@@ -1,7 +1,7 @@
 # Consuming abkit Results — Agent Guide
 
-> **Schema version:** 1.0  
-> **Applies to:** `ResultPayload` (JSON) and the exported memo text  
+> **Schema version:** 1.2
+> **Applies to:** `ResultPayload` (JSON) and the exported memo text
 > **Source of truth:** `abkit-core/src/abkit_core/schemas.py`
 
 ---
@@ -19,12 +19,44 @@ Skills and templates must read from these outputs. They must not re-implement th
 
 ---
 
+## Input modes for skills that consume results
+
+### When the ResultPayload is available
+
+Paste or attach the full JSON. Skills read all values from it and do not prompt for information already present in the payload.
+
+### When the ResultPayload is not yet available
+
+Skills that require a `ResultPayload` (prelaunch-qa and results-memo) **cannot** produce a meaningful output without it. The payload contains statistical values (p-values, effect sizes, SRM results, decisions) that are computed by abkit-core and cannot be supplied by hand.
+
+When the payload is absent, the skill must:
+1. State clearly that the `ResultPayload` is required.
+2. Explain how to obtain it: run the abkit pipeline with assignment and metrics CSVs uploaded.
+3. Not produce a partial or estimated output.
+
+**The one exception** is the `spec-review` skill, which accepts an `ExperimentConfig` interactively. See [`spec-review/README.md`](../spec-review/README.md) for how missing required fields are collected before the review runs.
+
+### What must never be requested interactively
+
+Skills must never ask the user to provide the following values by hand:
+- `p_value`, `ci_lower`, `ci_upper`, `is_significant` from any `MetricEstimate`
+- `srm_check.severity`, `srm_check.p_value`, `srm_check.explanation`
+- `decision.recommendation`, `decision.reasoning_summary`
+- `analysis.bonferroni_correction_applied`, `analysis.secondary_alpha_used`
+- Any value that is computed by `abkit-core` and stored in the payload
+
+The only interactive inputs that are acceptable are:
+- `ExperimentConfig` field values (for `spec-review` in interactive mode)
+- Target audience for the memo (`"analyst"` / `"product_manager"` / `"executive"`)
+
+---
+
 ## Part 1 — The `ResultPayload` JSON
 
 ### Top-level fields
 
 ```
-schema_version    string    Always "1.0" for v1 payloads.
+schema_version    string    "1.0" for legacy payloads; "1.1" for payloads produced by schema v1.1 configs; "1.2" for payloads produced by schema v1.2+ configs (includes Bonferroni correction fields).
 experiment_id     string    Stable identifier — use this to correlate runs.
 run_id            string    Unique identifier for this specific analysis run.
 status            string    "success" | "warning" | "failed"
@@ -94,17 +126,50 @@ issues              array    DiagnosticIssue list for downstream filtering.
 
 **Trust gate rule:** If `srm_check.severity == "critical"`, a `ship` recommendation is not warranted. Surface the `explanation` text and the `max_absolute_drift` value to the reader before discussing results.
 
+### Reading `spec_validation.normalized_config.guardrail_directions`
+
+This field (added in schema v1.1) is an optional map of guardrail metric name → desired direction.
+It lives on the `ExperimentConfig` object embedded inside `spec_validation.normalized_config`.
+
+```
+guardrail_directions   object   Map of metric name → "increase" | "decrease" | "flat".
+                                 Empty when the experiment owner did not declare any directions.
+```
+
+Allowed direction values:
+
+| Value | Meaning |
+|---|---|
+| `increase` | The metric should go up. A significant negative lift blocks. |
+| `decrease` | The metric should go down. A significant positive lift blocks. |
+| `flat` | No movement desired. Any significant change blocks (same as undeclared). |
+
+When a guardrail metric is **not** listed in this map, the legacy behaviour applies:
+any statistically significant movement triggers a hold.
+
+**Do not re-implement this logic.** The `decision.recommendation` and `decision.reasoning_summary`
+fields already reflect the correct direction-aware outcome. Read those fields instead.
+
 ### Reading `analysis`
 
 ```
-primary_metric_result       object   MetricEstimate for the primary metric (raw).
-effective_primary_estimate  object   The estimate actually used for the decision: CUPED-adjusted if CUPED was applied, raw otherwise.
-secondary_metric_results    array    MetricEstimate list for secondary metrics.
-guardrail_metric_results    array    MetricEstimate list for guardrail metrics.
-cuped_estimate              object   CUPED-adjusted MetricEstimate. Null if CUPED was not applied.
-cuped_readiness             object   CupedReadiness assessment. Null if no pre-period data was provided.
-segment_summaries           array    Per-segment result objects.
+primary_metric_result         object         MetricEstimate for the primary metric (raw).
+effective_primary_estimate    object         The estimate actually used for the decision: CUPED-adjusted if CUPED was applied, raw otherwise.
+secondary_metric_results      array          MetricEstimate list for secondary metrics.
+guardrail_metric_results      array          MetricEstimate list for guardrail metrics.
+cuped_estimate                object         CUPED-adjusted MetricEstimate. Null if CUPED was not applied.
+cuped_readiness               object         CupedReadiness assessment. Null if no pre-period data was provided.
+segment_summaries             array          Per-segment result objects.
+secondary_alpha_used          number | null  The significance threshold applied to secondary metrics.
+                                             Equals config.alpha when correction is off or m=1.
+                                             Equals config.alpha / m when Bonferroni correction is on and m >= 2.
+                                             Null when no secondary metrics are declared.
+bonferroni_correction_applied boolean        True when Bonferroni correction was enabled AND m >= 2 secondary
+                                             metrics were declared (i.e. the threshold actually differs from alpha).
+                                             False in all other cases.
 ```
+
+**Bonferroni correction:** When `bonferroni_correction_applied` is `true`, secondary metrics in `secondary_metric_results` have their `is_significant` flag set against `secondary_alpha_used`, not against `decision.alpha_used`. Use `secondary_alpha_used` when writing statements like "significant at alpha/3=0.0167" for secondary metrics. The primary metric and guardrail metrics are always evaluated at `decision.alpha_used`.
 
 Each `MetricEstimate` has:
 
@@ -121,10 +186,17 @@ relative_lift    number | null   Fractional change: absolute_lift / control_mean
 p_value          number | null   Null when inference was not run.
 ci_lower         number | null   Lower bound of the confidence interval.
 ci_upper         number | null   Upper bound of the confidence interval.
-is_significant   bool | null     True when p_value < alpha_used.
+is_significant   bool | null     True when p_value < alpha_used for this metric's role:
+                                 - Primary: uses decision.alpha_used (config.alpha).
+                                 - Secondary: uses analysis.secondary_alpha_used
+                                   (config.alpha / m when Bonferroni correction applies,
+                                   otherwise config.alpha).
+                                 - Guardrail: uses decision.alpha_used (config.alpha).
 ```
 
 **Which estimate to use:** Always read `effective_primary_estimate`, not `primary_metric_result`, when reporting the headline result. `abkit-core` sets this field to the CUPED-adjusted estimate when CUPED was applied, so consuming code never needs to repeat that selection logic.
+
+**Reading guardrail direction context:** When `analysis.guardrail_metric_results` contains a significant metric that caused a hold, the decision object's `reasoning_summary` and `key_caveats` already include the direction explanation produced by `abkit-core`. Do not re-derive blocking logic from the raw metric values; read the decision fields directly.
 
 The `cuped_readiness` object (when present):
 
@@ -226,3 +298,4 @@ These codes appear in `DiagnosticIssue.code` across all check types. Use them fo
 | `POWER_OUT_OF_RANGE` | `power` is unusually low (< 0.7) |
 | `UNKNOWN_VARIANT_IN_ASSIGNMENT` | Assignment data contains a variant not in config |
 | `MISSING_REQUIRED_CSV_COLUMNS` | A required CSV column is absent |
+| `GUARDRAIL_DIRECTION_MISMATCH` | Reserved for future use; a direction check produced a conflict |

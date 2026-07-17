@@ -1,0 +1,5 @@
+experiment_id,unit_id,variant,assignment_ts,exposed,country,device_type
+exp_YOUR_ID,u0001,control,2024-03-01T09:00:00,True,US,mobile
+exp_YOUR_ID,u0002,treatment,2024-03-01T09:01:00,True,US,desktop
+exp_YOUR_ID,u0003,control,2024-03-01T09:02:00,True,GB,mobile
+exp_YOUR_ID,u0004,treatment,2024-03-01T09:03:00,True,CA,tablet

@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.2"
 experiment_name: "Checkout button redesign"
 experiment_id: "exp_clean_001"
 owner: "growth-data-science"
@@ -9,6 +9,8 @@ secondary_metrics:
   - "revenue_per_user"
 guardrail_metrics:
   - "refund_rate"
+guardrail_directions:
+  refund_rate: "decrease"
 variants:
   - "control"
   - "treatment"

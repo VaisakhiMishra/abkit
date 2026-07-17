@@ -1,0 +1,117 @@
+# ============================================================
+# abkit experiment config template — schema version 1.2
+# ============================================================
+# Copy this file, fill in every required field, and upload it
+# on the Setup page of the abkit Streamlit app.
+#
+# Required fields are marked [REQUIRED].
+# Optional fields are marked [OPTIONAL] with their defaults.
+#
+# Source of truth: abkit-core/src/abkit_core/schemas.py
+# ============================================================
+
+# ----------------------------------------------------------
+# Identity
+# ----------------------------------------------------------
+schema_version: "1.2"                          # [REQUIRED] keep exactly "1.2"
+experiment_name: "My experiment"               # [REQUIRED] human-readable name
+experiment_id: "exp_YYYYMMDD_short_slug"       # [REQUIRED] stable slug used in CSV files
+owner: "team-name"                             # [REQUIRED] owning team or person
+hypothesis: "Describe the expected mechanism and direction of the effect." # [REQUIRED] ≥ 20 chars
+
+# ----------------------------------------------------------
+# Primary metric
+# ----------------------------------------------------------
+primary_metric: "conversion_rate"             # [REQUIRED] must match metric_name in metrics CSV
+metric_type: "proportion"                     # [REQUIRED] "proportion" or "continuous"
+                                              # proportion = binary 0/1 indicator per unit
+                                              # continuous = any numeric value per unit
+
+# ----------------------------------------------------------
+# Variants and traffic split
+# ----------------------------------------------------------
+variants:                                     # [REQUIRED] exactly two in v1
+  - "control"
+  - "treatment"
+
+expected_allocation:                          # [REQUIRED] keys must match variants; values must sum to 1.0
+  control: 0.5
+  treatment: 0.5
+
+unit_of_randomization: "user_id"             # [REQUIRED] e.g. "user_id", "session_id", "device_id"
+
+# ----------------------------------------------------------
+# Statistical parameters
+# ----------------------------------------------------------
+alpha: 0.05                                  # [REQUIRED] significance threshold (0 < alpha < 1)
+power: 0.80                                  # [REQUIRED] desired statistical power (0 < power < 1)
+mde: 0.02                                    # [REQUIRED] minimum detectable effect (> 0); relative for proportion,
+                                             # absolute for continuous
+
+# ----------------------------------------------------------
+# Secondary metrics (optional)
+# Plain strings are coerced to continuous type automatically.
+# Use the full-object form only when the metric is binary/proportion.
+# ----------------------------------------------------------
+secondary_metrics:                           # [OPTIONAL] omit or set to [] to skip
+  - "revenue_per_user"                       # shorthand — inferred as continuous
+  - name: "add_to_cart_rate"                 # full object form
+    metric_type: "proportion"                # override to proportion when values are binary 0/1
+
+# ----------------------------------------------------------
+# Guardrail metrics
+# ----------------------------------------------------------
+guardrail_metrics:                           # [OPTIONAL] strongly recommended; omit to skip
+  - "refund_rate"                            # plain string — inferred as continuous
+  - "error_rate"
+
+# Declare the desired direction for each guardrail metric.
+# Keys must exactly match names listed in guardrail_metrics above.
+# Allowed values: "increase", "decrease", "flat" (or omit a metric to use legacy any-movement blocking).
+#   increase  → only a significant negative lift triggers a hold
+#   decrease  → only a significant positive lift triggers a hold
+#   flat      → any significant movement triggers a hold (same as omitting)
+guardrail_directions:                        # [OPTIONAL] omit entirely when no directions are declared
+  refund_rate: "decrease"
+  error_rate: "flat"
+
+# ----------------------------------------------------------
+# Bonferroni correction for secondary metrics
+# When true and m >= 2 secondary metrics are declared,
+# each secondary metric is tested at alpha / m instead of alpha.
+# Primary and guardrail metrics are always tested at alpha.
+# Has no effect with 0 or 1 secondary metrics.
+# ----------------------------------------------------------
+apply_bonferroni_correction: false           # [OPTIONAL] default: false
+
+# ----------------------------------------------------------
+# Duration planning (optional — required for duration estimate on Setup page)
+# ----------------------------------------------------------
+daily_eligible_traffic: 5000                 # [OPTIONAL] eligible units per day
+eligibility_rate: 0.60                       # [OPTIONAL] fraction of total traffic eligible (0, 1]
+traffic_cap: 1.0                             # [OPTIONAL] fraction of eligible traffic to route (0, 1]
+ramp_up_days: 2                              # [OPTIONAL] days before full allocation is reached
+planning_buffer_pct: 0.15                    # [OPTIONAL] fractional buffer on planned duration (>= 0)
+analysis_window_days: 14                     # [OPTIONAL] planned experiment duration in days
+pre_period_window_days: 14                   # [OPTIONAL] days of pre-period data for CUPED
+
+# ----------------------------------------------------------
+# Per-experiment SRM threshold (optional)
+# Overrides the global default of 0.01.
+# ----------------------------------------------------------
+srm_alpha: 0.01                              # [OPTIONAL] must be between 0.001 and 0.1
+
+# ----------------------------------------------------------
+# Segment dimensions to analyze (optional — parsed but not yet broken out)
+# ----------------------------------------------------------
+segments:                                    # [OPTIONAL]
+  - "country"
+  - "device_type"
+
+# ----------------------------------------------------------
+# Housekeeping
+# ----------------------------------------------------------
+exclusion_rules:                             # [OPTIONAL] plain-language filter notes
+  - "Exclude users who created their account in the last 7 days"
+
+notes: "Free-form context about this experiment run." # [OPTIONAL]

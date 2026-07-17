@@ -1,0 +1,25 @@
+schema_version: "1.2"
+experiment_id: guardrail-increase-ship
+experiment_name: Guardrail Increase Ship Test
+owner: experiments@example.com
+hypothesis: The treatment will improve conversion value (primary) while maintaining or increasing the activation rate (guardrail).
+unit_of_randomization: user_id
+variants:
+  - control
+  - treatment
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+primary_metric: conversion_value
+metric_type: continuous
+alpha: 0.05
+power: 0.8
+mde: 0.02
+srm_alpha: 0.01
+secondary_metrics:
+  - sessions_per_user
+guardrail_metrics:
+  - activation_rate
+guardrail_directions:
+  activation_rate: increase
+notes: "Scenario D — guardrail metric moves significantly in the correct (increase) direction. Decision must be ship, not hold."

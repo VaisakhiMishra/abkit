@@ -1,0 +1,61 @@
+# ============================================================
+# Example 3 — Bonferroni correction ON
+# ============================================================
+# apply_bonferroni_correction: true
+# With m=3 secondary metrics and alpha=0.05:
+#   secondary_alpha = 0.05 / 3 ≈ 0.0167
+# Each secondary metric's is_significant flag is evaluated
+# against 0.0167, not 0.05.
+# The confidence intervals are also computed at 1 - 0.0167
+# (narrower than without correction).
+# Primary metric and guardrail metrics are always tested at 0.05.
+#
+# Has no effect when m=0 or m=1:
+#   0 secondary → secondary_alpha_used=null
+#   1 secondary → secondary_alpha_used=0.05 (alpha/1=alpha),
+#                 bonferroni_correction_applied=false
+#
+# Payload fields to inspect after analysis:
+#   analysis.bonferroni_correction_applied  → true
+#   analysis.secondary_alpha_used           → 0.0167 (= 0.05 / 3)
+# ============================================================
+
+schema_version: "1.2"
+experiment_name: "Onboarding flow — Bonferroni ON"
+experiment_id: "exp_example_bonf_on_001"
+owner: "growth-data-science"
+hypothesis: "A streamlined onboarding flow will improve day-7 retention without harming engagement breadth."
+primary_metric: "day7_retention"
+metric_type: "proportion"
+
+variants:
+  - "control"
+  - "treatment"
+
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.02
+
+# Three secondary metrics: adjusted_alpha = 0.05 / 3 ≈ 0.0167
+secondary_metrics:
+  - "day1_retention"      # proportion — declared explicitly
+  - "day3_retention"      # proportion — declared explicitly
+  - "features_used"       # continuous — inferred
+
+guardrail_metrics:
+  - "support_tickets"
+
+guardrail_directions:
+  support_tickets: "decrease"  # should go down; increase = HOLD
+
+# Bonferroni ON: each secondary tested at alpha / m = 0.05 / 3 ≈ 0.0167
+apply_bonferroni_correction: true
+
+daily_eligible_traffic: 4000
+analysis_window_days: 21
+srm_alpha: 0.01

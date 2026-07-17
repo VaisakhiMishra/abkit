@@ -1,0 +1,28 @@
+schema_version: "1.2"
+experiment_name: "Bonferroni OFF fixture"
+experiment_id: "exp_bonf_on_001"
+owner: "experiments@example.com"
+hypothesis: "Treatment increases conversion value. Secondary metrics (metric_a, metric_b, metric_c) are each tested at the full alpha=0.05 (Bonferroni correction disabled)."
+unit_of_randomization: "user_id"
+variants:
+  - control
+  - treatment
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+primary_metric: "conversion_value"
+metric_type: "continuous"
+secondary_metrics:
+  - "metric_a"
+  - "metric_b"
+  - "metric_c"
+guardrail_metrics:
+  - "activation_rate"
+# No guardrail_directions — activation_rate uses legacy any-movement blocking
+apply_bonferroni_correction: false
+# secondary_alpha = alpha = 0.05 (no division by m)
+alpha: 0.05
+power: 0.80
+mde: 0.02
+srm_alpha: 0.01
+notes: "Scenario E (OFF variant) — Bonferroni OFF. Same data as bonferroni_on fixture. Secondary metrics tested at full alpha=0.05. Decision: ship."

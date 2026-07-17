@@ -89,6 +89,58 @@ Expected results:
 - CUPED: **not_recommended** (coverage=0.4, r≈−0.11)
 - Decision: ship (raw estimate used, CUPED not applied)
 
+### Scenario D — guardrail ship (Scenario D fixtures)
+
+Files: `abkit-core/tests/fixtures/guardrail_ship/`
+
+This scenario tests the direction-aware guardrail blocking rule. The guardrail metric
+(`activation_rate`) rises significantly in the treatment arm — but because the config
+declares `direction: increase`, this movement is in the correct direction and must NOT
+trigger a hold.
+
+Expected results:
+- Spec valid
+- SRM: pass
+- CUPED: **recommended** (pre-period data present, high pre-post correlation)
+- Guardrail: `activation_rate` is significant with positive lift → correct direction → does NOT block
+- Decision: **ship** (guardrail increase is correct direction; primary metric significant)
+
+**Common mistake:** If the guardrail direction is omitted from the config, the legacy
+rule applies — any significant movement blocks — and the decision becomes `hold` even
+though the metric improved. Always declare `guardrail_directions` when the metric has
+a known desired direction.
+
+### Scenario E — Bonferroni correction ON and OFF
+
+Files:
+- `abkit-core/tests/fixtures/bonferroni_on/` (apply_bonferroni_correction: true)
+- `abkit-core/tests/fixtures/bonferroni_off/` (apply_bonferroni_correction: false, same CSV data)
+
+Both scenarios use the same CSV files (120 assignments, 60/arm; metrics for `conversion_value`,
+`metric_a`, `metric_b`, `metric_c`, and `activation_rate`).
+
+**Bonferroni ON** — Upload `bonferroni_on/config.yaml` with the shared CSV files:
+
+Expected results:
+- Spec valid
+- SRM: pass (balanced 50/50)
+- CUPED: **recommended** (pre-period data present for `conversion_value`)
+- `secondary_alpha_used` = 0.05 / 3 ≈ 0.0167 (shown in analysis payload)
+- `bonferroni_correction_applied` = true
+- Decision: **ship** (primary metric strongly significant, guardrail not triggered)
+
+**Bonferroni OFF** — Upload `bonferroni_off/config.yaml` with the same CSV files:
+
+Expected results:
+- Spec valid
+- `secondary_alpha_used` = 0.05 (no adjustment)
+- `bonferroni_correction_applied` = false
+- Decision: **ship** (same primary metric; correction status only affects secondary thresholds)
+
+**What to observe:** The primary metric p-value and the decision are identical between ON and OFF —
+only the significance threshold applied to secondary metrics changes. With a marginal secondary
+effect, you would see `is_significant=false` (ON) vs `is_significant=true` (OFF).
+
 ---
 
 ## UX rough edges (intentionally deferred)
@@ -105,21 +157,34 @@ Expected results:
 
 6. **No sticky file names** — file uploader labels do not show the name of the currently loaded file when returning to a page.
 
-7. **Guardrail directionality** is not modelled — any significant guardrail triggers a hold recommendation. The memo notes this explicitly. Analysts should inspect the direction manually.
+7. **Guardrail directionality** is modelled via `guardrail_directions` in the config (schema v1.1+). When a direction is declared, only movement that violates that direction triggers a hold. When no direction is declared, the legacy behaviour applies: any significant movement blocks. The Memo page shows a per-metric direction badge.
+
+8. **Bonferroni correction for secondary metrics** is an opt-in flag (`apply_bonferroni_correction: true` in the config, schema v1.2). When enabled with m ≥ 2 secondary metrics, each secondary is tested at `alpha / m` rather than `alpha`. The primary and guardrail metrics always use the declared `alpha`. See `abkit-templates/configs/example_bonferroni_on.yaml` for a copy-paste example.
 
 ## Schema artifact
 
-`abkit-templates/configs/result_payload.schema.json` is machine-generated from the
-live Pydantic models.  Do not edit it by hand.  To regenerate after a schema change:
+`abkit-templates/configs/result_payload.schema.json` and
+`abkit-templates/configs/experiment_config.schema.json` are machine-generated
+from the live Pydantic models.  Do not edit them by hand.  To regenerate after
+a schema change:
 
 ```bash
 cd abkit-core
 python3 -c "
-from src.abkit_core.schemas import ResultPayload
-import json
+import json, sys
+sys.path.insert(0, 'src')
+from abkit_core.schemas import ExperimentConfig, ResultPayload
+
+ec = ExperimentConfig.model_json_schema()
+ec['description'] = 'Schema version 1.2 — canonical experiment configuration for abkit. Generated from abkit_core.schemas.ExperimentConfig.'
+with open('../abkit-templates/configs/experiment_config.schema.json', 'w') as f:
+    json.dump(ec, f, indent=2); f.write('\n')
+
+rp = ResultPayload.model_json_schema()
+rp['description'] = 'Schema version 1.2 — canonical result payload for abkit. Generated from abkit_core.schemas.ResultPayload.'
 with open('../abkit-templates/configs/result_payload.schema.json', 'w') as f:
-    json.dump(ResultPayload.model_json_schema(), f, indent=2)
-    f.write('\n')
+    json.dump(rp, f, indent=2); f.write('\n')
+print('Both schema artifacts regenerated.')
 "
 ```
 

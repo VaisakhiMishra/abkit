@@ -1,0 +1,15 @@
+experiment_id,unit_id,metric_name,metric_value,period,country,device_type
+exp_YOUR_ID,u0001,conversion_rate,0.0,post,US,mobile
+exp_YOUR_ID,u0001,revenue_per_user,12.50,post,US,mobile
+exp_YOUR_ID,u0001,refund_rate,0.03,post,US,mobile
+exp_YOUR_ID,u0001,conversion_rate,0.08,pre,US,mobile
+exp_YOUR_ID,u0002,conversion_rate,1.0,post,US,desktop
+exp_YOUR_ID,u0002,revenue_per_user,15.20,post,US,desktop
+exp_YOUR_ID,u0002,refund_rate,0.02,post,US,desktop
+exp_YOUR_ID,u0002,conversion_rate,0.09,pre,US,desktop
+exp_YOUR_ID,u0003,conversion_rate,0.0,post,GB,mobile
+exp_YOUR_ID,u0003,revenue_per_user,11.80,post,GB,mobile
+exp_YOUR_ID,u0003,refund_rate,0.05,post,GB,mobile
+exp_YOUR_ID,u0004,conversion_rate,1.0,post,CA,tablet
+exp_YOUR_ID,u0004,revenue_per_user,14.30,post,CA,tablet
+exp_YOUR_ID,u0004,refund_rate,0.01,post,CA,tablet

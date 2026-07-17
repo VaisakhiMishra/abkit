@@ -18,7 +18,7 @@ experimentation:
   duplicate assignments, metric join gaps, and other data-integrity issues.
 - **Variance reduction** — assess CUPED readiness and optionally apply an
   OLS CUPED adjustment to reduce noise.
-- **Analysis** — compute Welch two-sample t-tests for continuous metrics and two-proportion z-tests for binary metrics, with confidence intervals and a ship/hold/inconclusive decision for supported v1 metric types.
+- **Analysis** — compute Welch two-sample t-tests for continuous metrics and two-proportion z-tests for binary metrics, with confidence intervals, direction-aware guardrail blocking, optional Bonferroni correction for secondary metrics, and a ship/hold/rerun/inconclusive decision.
 - **Result payloads** — produce a single canonical JSON artifact that can
   drive a memo, a template, or an agent workflow.
 
@@ -30,9 +30,9 @@ experimentation:
   assignment, feature flags, or real-time traffic routing.  It works with
   data you have already collected.
 - **Not a sequential testing or Bayesian engine.** All tests are
-  two-sided frequentist; there is no optional stopping, no multiple-
-  comparison correction across secondary metrics, and no posterior
-  calculation.
+  two-sided frequentist; there is no optional stopping, and no posterior
+  calculation.  Optional Bonferroni correction for secondary metrics is
+  available via `apply_bonferroni_correction` in the experiment config.
 - **Not a multi-variant analysis engine (v1).** Exactly two variants
   (control + one treatment arm) are supported.  Three or more variants
   raise an explicit error.
@@ -80,8 +80,8 @@ calls `abkit-core`, and renders the results.  No formulas or significance
 checks are re-implemented in the UI.
 
 **`abkit-templates`** contains versioned JSON schemas for experiment
-configs and result payloads, plus example YAML configs for copy-paste
-scaffolding.
+configs and result payloads, YAML config templates and copy-paste
+examples, and CSV templates for the assignment and metrics upload inputs.
 
 Data flows in one direction: config → QA → analysis → result payload →
 memo/export.  Session state in the app enforces this order and invalidates
@@ -95,13 +95,6 @@ downstream outputs whenever upstream inputs change.
 .
 ├── README.md
 ├── LOCAL_RUN.md              ← step-by-step walkthrough with fixture scenarios
-├── kit_docs/
-│   ├── 00-guidelines.md
-│   ├── 01-product.md
-│   ├── 02-architecture.md
-│   ├── 03-schemas.md
-│   ├── 04-skills.md
-│   └── 05-acceptance.md
 ├── abkit-core/
 │   ├── pyproject.toml
 │   ├── src/abkit_core/
@@ -112,7 +105,7 @@ downstream outputs whenever upstream inputs change.
 │   │   ├── variance.py       ← CUPED readiness assessment and OLS adjustment
 │   │   └── analysis.py       ← statistical analysis and decision scaffolding
 │   └── tests/
-│       ├── fixtures/         ← clean, srm, weak_cuped CSV + YAML scenarios
+│       ├── fixtures/         ← clean, srm, weak_cuped, guardrail_ship, bonferroni_on, bonferroni_off scenarios
 │       ├── test_schemas.py
 │       ├── test_design.py
 │       ├── test_quality.py
@@ -137,9 +130,18 @@ downstream outputs whenever upstream inputs change.
 │   ├── prelaunch-qa/README.md    ← QA results interpretation prompt
 │   └── results-memo/README.md    ← analysis review + decision memo drafting prompts
 └── abkit-templates/
-    └── configs/
-        ├── experiment_config.schema.json
-        └── result_payload.schema.json  ← machine-generated; see "Regenerating the schema artifact" below
+    ├── configs/
+    │   ├── experiment_config.schema.json          ← machine-generated
+    │   ├── result_payload.schema.json             ← machine-generated
+    │   ├── experiment_config.template.yaml        ← full annotated config template
+    │   ├── example_guardrail_directions.yaml      ← direction-aware guardrail example
+    │   ├── example_bonferroni_off.yaml            ← Bonferroni OFF example
+    │   ├── example_bonferroni_on.yaml             ← Bonferroni ON example
+    │   └── README.md                              ← config template guide
+    └── data/
+        ├── assignments_template.csv               ← minimal assignments CSV template
+        ├── metrics_template.csv                   ← minimal metrics CSV template
+        └── README.md                              ← CSV column reference
 ```
 
 ---
@@ -161,35 +163,45 @@ pytest --cov=abkit_core --cov-report=term-missing
 ```
 
 There are five test modules covering schemas, design validation, QA
-checks, CUPED variance reduction, and end-to-end analysis.  Three fixture
-scenarios are provided (`clean`, `srm`, `weak_cuped`) to drive the main
-code paths.
+checks, CUPED variance reduction, and end-to-end analysis.  Six fixture
+scenarios are provided (`clean`, `srm`, `weak_cuped`, `guardrail_ship`,
+`bonferroni_on`, `bonferroni_off`) to drive the main code paths.
 
 ---
 
-## Regenerating the schema artifact
+## Regenerating the schema artifacts
 
-`abkit-templates/configs/result_payload.schema.json` is machine-generated
-from the live Pydantic models in `abkit-core`.  It is **not** maintained
+Both `abkit-templates/configs/experiment_config.schema.json` and
+`abkit-templates/configs/result_payload.schema.json` are machine-generated
+from the live Pydantic models in `abkit-core`.  They are **not** maintained
 by hand.  After any change to a model in
-`abkit-core/src/abkit_core/schemas.py`, regenerate it with:
+`abkit-core/src/abkit_core/schemas.py`, regenerate both with:
 
 ```bash
 # From the repo root
 cd abkit-core
 python3 -c "
-from src.abkit_core.schemas import ResultPayload
-import json
+import json, sys
+sys.path.insert(0, 'src')
+from abkit_core.schemas import ExperimentConfig, ResultPayload
+
+ec = ExperimentConfig.model_json_schema()
+ec['description'] = 'Schema version 1.2 — canonical experiment configuration for abkit. Generated from abkit_core.schemas.ExperimentConfig.'
+with open('../abkit-templates/configs/experiment_config.schema.json', 'w') as f:
+    json.dump(ec, f, indent=2); f.write('\n')
+
+rp = ResultPayload.model_json_schema()
+rp['description'] = 'Schema version 1.2 — canonical result payload for abkit. Generated from abkit_core.schemas.ResultPayload.'
 with open('../abkit-templates/configs/result_payload.schema.json', 'w') as f:
-    json.dump(ResultPayload.model_json_schema(), f, indent=2)
-    f.write('\n')
+    json.dump(rp, f, indent=2); f.write('\n')
+
+print('Both schema artifacts regenerated.')
 "
 ```
 
-The output is standard JSON Schema. It contains no nonstandard or internal-only metadata.  The
-`$defs` block holds every sub-schema referenced by `ResultPayload`,
-including `AnalysisResult`, `DecisionMemo`, `MetricEstimate`, and all
-nested types.
+The output is standard JSON Schema. The `$defs` block holds every
+sub-schema referenced by the root models, including `AnalysisResult`,
+`DecisionMemo`, `MetricEstimate`, and all nested types.
 
 ---
 
@@ -221,7 +233,7 @@ Walk through the four pages in order:
 
 Use the fixture files in `abkit-core/tests/fixtures/` as sample inputs.
 See [`LOCAL_RUN.md`](LOCAL_RUN.md) for a detailed end-to-end walkthrough
-with expected outputs for all three fixture scenarios.
+with expected outputs for all six fixture scenarios.
 
 ---
 
@@ -247,11 +259,12 @@ addressed in this release:
   than two variants.
 - **Sequential and Bayesian testing.** All tests are fixed-horizon
   two-sided frequentist.
-- **Multiple-comparison correction.** Secondary and guardrail metrics are
-  analyzed independently with no family-wise error rate adjustment.
-- **Guardrail directionality.** Any statistically significant guardrail
-  movement triggers a hold recommendation regardless of direction.
-  Analysts must inspect the absolute lift manually.
+- **Multiple-comparison correction.** Secondary metrics support optional
+  Bonferroni correction via `apply_bonferroni_correction: true` in the
+  experiment config.  When enabled with m ≥ 2 secondary metrics, each is
+  tested at `alpha / m` instead of `alpha`.  The primary metric and guardrail
+  metrics are always tested at the declared `alpha`.  Correction is off by
+  default (`apply_bonferroni_correction: false`).
 - **Segment analysis.** The `segments` field in `ExperimentConfig` is
   parsed and validated but no per-segment breakdowns are computed.
 - **Duration planner accuracy.** The planner on the Setup page uses a

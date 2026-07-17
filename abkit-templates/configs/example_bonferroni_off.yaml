@@ -1,0 +1,50 @@
+# ============================================================
+# Example 2 — Bonferroni correction OFF (default)
+# ============================================================
+# apply_bonferroni_correction: false (the default).
+# Each secondary metric is tested at the full alpha (0.05).
+# Use this when you are not concerned about family-wise error
+# rate across secondary metrics, or when you have 0-1 secondaries.
+#
+# Payload fields to inspect after analysis:
+#   analysis.bonferroni_correction_applied  → false
+#   analysis.secondary_alpha_used           → 0.05  (equals alpha)
+# ============================================================
+
+schema_version: "1.2"
+experiment_name: "Landing page copy test — Bonferroni OFF"
+experiment_id: "exp_example_bonf_off_001"
+owner: "growth-data-science"
+hypothesis: "New landing page copy will increase sign-up rate and improve engagement depth."
+primary_metric: "signup_rate"
+metric_type: "proportion"
+
+variants:
+  - "control"
+  - "treatment"
+
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.03
+
+secondary_metrics:
+  - "pages_viewed"        # continuous — plain string, inferred as continuous
+  - "time_on_site_sec"    # continuous
+
+guardrail_metrics:
+  - "bounce_rate"
+
+guardrail_directions:
+  bounce_rate: "decrease"  # bounce should go down; increase = HOLD
+
+# Bonferroni OFF: each secondary tested at alpha=0.05
+apply_bonferroni_correction: false
+
+daily_eligible_traffic: 3000
+analysis_window_days: 14
+srm_alpha: 0.01

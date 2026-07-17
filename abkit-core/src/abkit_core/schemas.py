@@ -4,7 +4,7 @@ Shared Pydantic schemas for the A/B Testing Productivity Kit.
 All layers (core, app, skills, templates) must import from this module.
 Schema drift should be treated as a bug — do not redefine these structures elsewhere.
 
-Schema version: 1.0
+Schema version: 1.2
 """
 
 from __future__ import annotations
@@ -67,6 +67,22 @@ class DecisionRecommendation(str, Enum):
     hold = "hold"
     rerun = "rerun"
     inconclusive = "inconclusive"
+
+
+class GuardrailDirection(str, Enum):
+    """
+    Desired direction for a guardrail metric.
+
+    ``increase`` — the metric should go up (block only if lift is negative).
+    ``decrease`` — the metric should go down (block only if lift is positive).
+    ``flat``     — no movement is desired; any significant change blocks.
+
+    When a guardrail metric is not listed in ``guardrail_directions`` on the
+    config, the legacy v1 behaviour applies: any significant movement blocks.
+    """
+    increase = "increase"
+    decrease = "decrease"
+    flat = "flat"
 
 
 class MetricPeriod(str, Enum):
@@ -239,6 +255,16 @@ class ExperimentConfig(BaseModel):
             "Each entry may be a plain string (name only) or a full MetricSpec object."
         ),
     )
+    guardrail_directions: dict[str, GuardrailDirection] = Field(
+        default_factory=dict,
+        description=(
+            "Optional map of guardrail metric name → desired direction. "
+            "Allowed values: 'increase', 'decrease', 'flat'. "
+            "When a guardrail metric is not listed here the legacy v1 behaviour "
+            "applies: any statistically significant movement triggers a hold. "
+            "Example: {\"revenue\": \"increase\", \"refund_rate\": \"decrease\"}."
+        ),
+    )
 
     @field_validator("secondary_metrics", "guardrail_metrics", mode="before")
     @classmethod
@@ -299,6 +325,16 @@ class ExperimentConfig(BaseModel):
             "e.g. 0.2 adds 20 percent."
         ),
     )
+    apply_bonferroni_correction: bool = Field(
+        default=False,
+        description=(
+            "When True, Bonferroni correction is applied to secondary metrics. "
+            "If there are m secondary metrics, significance is tested at alpha / m "
+            "rather than alpha. Has no effect when there are 0 or 1 secondary metrics. "
+            "The primary metric is always tested at the declared alpha. "
+            "Guardrail metrics are always tested at the declared alpha."
+        ),
+    )
     exclusion_rules: list[str] = Field(
         default_factory=list,
         description="Plain-language exclusions or filter notes.",
@@ -343,6 +379,25 @@ class ExperimentConfig(BaseModel):
         if abs(total - 1.0) > 1e-6:
             raise ValueError(
                 f"expected_allocation values must sum to 1.0 (got {total:.6f})."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_guardrail_directions_keys(self) -> "ExperimentConfig":
+        """
+        Every key in guardrail_directions must be a declared guardrail metric name.
+
+        This is enforced as a Pydantic model_validator so that misconfigured
+        YAML files (e.g. a typo in a metric name) are caught at load time, not
+        silently ignored at analysis time.
+        """
+        guardrail_names = {m.name for m in self.guardrail_metrics}
+        unknown = set(self.guardrail_directions.keys()) - guardrail_names
+        if unknown:
+            raise ValueError(
+                f"guardrail_directions contains metric name(s) not in guardrail_metrics: "
+                f"{sorted(unknown)}. "
+                "Each key must match a metric name listed in guardrail_metrics."
             )
         return self
 
@@ -553,6 +608,25 @@ class AnalysisResult(BaseModel):
     cuped_estimate: MetricEstimate | None = None
     cuped_readiness: CupedReadiness | None = None
     segment_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    secondary_alpha_used: float | None = Field(
+        default=None,
+        description=(
+            "The significance threshold actually applied to secondary metrics. "
+            "Equals config.alpha when Bonferroni correction is off or when there is "
+            "only one secondary metric. Equals config.alpha / m when Bonferroni "
+            "correction is on and m > 1 secondary metrics were declared. "
+            "None when no secondary metrics were declared."
+        ),
+    )
+    bonferroni_correction_applied: bool = Field(
+        default=False,
+        description=(
+            "True when Bonferroni correction was enabled in the config AND at least "
+            "two secondary metrics were declared (i.e. the adjusted alpha differs "
+            "from the base alpha). False otherwise, including when correction is "
+            "enabled but only one secondary metric is present."
+        ),
+    )
 
 
 class DecisionMemo(BaseModel):
@@ -585,7 +659,7 @@ class ResultPayload(BaseModel):
 
     model_config = _MODEL_CFG
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.2"
     experiment_id: str
     run_id: str
     status: RunStatus
@@ -615,6 +689,7 @@ ISSUE_POWER_RANGE = "POWER_OUT_OF_RANGE"
 ISSUE_MDE_RANGE = "MDE_OUT_OF_RANGE"
 ISSUE_UNKNOWN_VARIANT = "UNKNOWN_VARIANT_IN_ASSIGNMENT"
 ISSUE_MISSING_CSV_COLUMNS = "MISSING_REQUIRED_CSV_COLUMNS"
+ISSUE_GUARDRAIL_DIRECTION_MISMATCH = "GUARDRAIL_DIRECTION_MISMATCH"
 
 
 def validate_config(config: ExperimentConfig, *, for_analysis: bool = False) -> list[DiagnosticIssue]:

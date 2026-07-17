@@ -1,0 +1,69 @@
+# ============================================================
+# Example 1 — Guardrail directionality
+# ============================================================
+# Demonstrates direction-aware guardrail blocking (schema v1.2).
+#
+# Scenario: A checkout redesign experiment.
+#   - Primary metric: conversion_rate (proportion)
+#   - Guardrails:   refund_rate   should go DOWN (decrease)
+#                  revenue        should go UP   (increase)
+#                  page_errors    should stay FLAT
+#
+# How direction-aware blocking works:
+#   refund_rate:  only triggers a HOLD if lift is significantly POSITIVE
+#                 (i.e., refunds went up — bad)
+#   revenue:      only triggers a HOLD if lift is significantly NEGATIVE
+#                 (i.e., revenue went down — bad)
+#   page_errors:  triggers a HOLD on any significant movement in either direction
+#   (a guardrail without a declared direction also uses "any movement" blocking)
+#
+# If a guardrail moved significantly in the CORRECT direction, it does NOT block.
+# The decision is always ship/hold/inconclusive — never re-derive it from raw values.
+# ============================================================
+
+schema_version: "1.2"
+experiment_name: "Checkout redesign — guardrail directionality example"
+experiment_id: "exp_example_guardrail_001"
+owner: "growth-data-science"
+hypothesis: "A redesigned checkout flow will increase conversion rate without harming revenue or quality."
+primary_metric: "conversion_rate"
+metric_type: "proportion"
+
+variants:
+  - "control"
+  - "treatment"
+
+expected_allocation:
+  control: 0.5
+  treatment: 0.5
+
+unit_of_randomization: "user_id"
+alpha: 0.05
+power: 0.80
+mde: 0.02
+
+secondary_metrics:
+  - "session_length"
+
+guardrail_metrics:
+  - "refund_rate"
+  - "revenue"
+  - "page_errors"
+
+guardrail_directions:
+  refund_rate: "decrease"   # refunds should go down; significant increase = HOLD
+  revenue: "increase"       # revenue should go up; significant decrease = HOLD
+  page_errors: "flat"       # any significant change = HOLD (same as omitting direction)
+  # Note: if a guardrail metric is NOT listed here, legacy behaviour applies:
+  # any statistically significant movement triggers a hold.
+
+apply_bonferroni_correction: false
+
+daily_eligible_traffic: 8000
+eligibility_rate: 0.70
+traffic_cap: 1.0
+ramp_up_days: 1
+planning_buffer_pct: 0.10
+analysis_window_days: 14
+pre_period_window_days: 14
+srm_alpha: 0.01
